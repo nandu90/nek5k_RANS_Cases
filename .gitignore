@@ -3,4 +3,6 @@
 *#*
 *nek5000
 *.log*
-
+*.state
+*0.f00*
+*makefile
