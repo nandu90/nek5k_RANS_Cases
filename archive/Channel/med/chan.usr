@@ -1,0 +1,350 @@
+C
+C  USER SPECIFIED ROUTINES: 
+C
+C     - boundary conditions 
+C     - initial conditions  
+C     - variable properties 
+C     - forcing function for fluid (f)
+C     - forcing function for passive scalar (q)
+C     - general purpose routine for checking errors etc.        
+C
+c-----------------------------------------------------------------------
+      include "experimental/rans_komg.f"
+      include "experimental/rans_wallfunctions.f"
+      include "/home/dshaver/NEKSOURCE/usrcode/limits.f"
+      include "/home/dshaver/NEKSOURCE/usrcode/utilities.f"
+      include "/home/dshaver/NEKSOURCE/usrcode/lineplot.f"
+c-----------------------------------------------------------------------
+      subroutine uservp (ix,iy,iz,eg)
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      integer ix,iy,iz,e,eg
+      real rans_mut,rans_mutsk,rans_mutso,rans_turbPrandtl
+      real mu_t,Pr_t
+
+      e = gllel(eg)
+
+      Pr_t=rans_turbPrandtl()
+      mu_t=rans_mut(ix,iy,iz,e)
+
+      if(ifield.eq.1) then
+        t(ix,iy,iz,e,4)=mu_t/cpfld(ifield,1) !store eddy viscosity for post processing
+        udiff = cpfld(ifield,1)+mu_t
+        utrans = cpfld(ifield,2)
+      elseif(ifield.eq.2) then
+        udiff = cpfld(ifield,1)+mu_t*cpfld(ifield,2)/(Pr_t*cpfld(1,2))
+        utrans = cpfld(ifield,2)
+      elseif(ifield.eq.3) then !use rho and mu from field 1
+        udiff = cpfld(1,1)+rans_mutsk(ix,iy,iz,e)
+        utrans = cpfld(1,2)
+      elseif(ifield.eq.4) then !use rho and mu from field 1
+        udiff = cpfld(1,1)+rans_mutso(ix,iy,iz,e)
+        utrans = cpfld(1,2)
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userf  (ix,iy,iz,ieg)
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+      common /cforce/ ffx_new,ffy_new,ffz_new
+
+      ffx = 0.0 !ffx_new ! This value determined from fixed U_b=1 case.
+      ffy = 0.0
+      ffz = 0.0
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userq  (ix,iy,iz,ieg)
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      common /rans_usr/ ifld_k, ifld_omega, m_id
+      integer ifld_k,ifld_omega, m_id
+
+      real rans_kSrc,rans_omgSrc
+     $   , rans_kDiag,rans_omgDiag
+
+      integer e,f,eg
+      ie = gllel(ieg)
+
+      if (ifield.eq.2) then
+        qvol = q_vol_periodic(ix,iy,iz,ie,ifield)
+        avol = 0.0
+      elseif (ifield.eq.ifld_k) then
+        qvol = rans_kSrc  (ix,iy,iz,ie)
+        avol = rans_kDiag (ix,iy,iz,ie)
+      elseif (ifield.eq.ifld_omega) then
+        qvol = rans_omgSrc (ix,iy,iz,ie)
+        avol = rans_omgDiag(ix,iy,iz,ie)
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userbc(ix,iy,iz,iside,eg) ! set up boundary conditions
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+c
+      real wd,upmin
+      common /walldist/ wd(lx1,ly1,lz1,lelv),upmin
+
+      character*3 cbv3, cbt3, cbk3, cbo3, cb3
+
+      integer ix,iy,iz,iside,e,eg
+      real velx,vely,blunt_vel
+      real usn(3),tsn(3),bsn(3),ut1,ut2,uw,utau,kw
+      real tw1,tw2,tkewall,omgwall,tauwall
+      real yplus,uplus,Econ,kappa,veddy,visc,factr,sCmu
+      e = gllel(eg)
+
+      velx =1.0 ! 0.38981288981*(-1.09-x)*(1.325+x)*72.431*1.5
+      vely =0.0 !-1.32536382536*(-1.09-x)*(1.325+x)*72.431*1.5
+
+      yplus= 100.0
+      Econ = 9.0
+      kappa= 0.4
+      sCmu = 0.3
+      visc=cpfld(1,1)
+
+      cb3  = cbc(iside,e,ifield)
+      cbv3 = cbc(iside,e,1)
+      cbt3 = cbc(iside,e,2)
+      cbk3 = cbc(iside,e,3)
+      cbo3 = cbc(iside,e,4)
+
+      if(cbv3.eq.'shl') then
+        call getangent   (tsn,ix,iy,iz,iside,e)
+        call getbitangent(bsn,ix,iy,iz,iside,e)
+
+        ut1=tsn(1)*ux+tsn(2)*uy
+        ut2=0.0
+        if(if3d) then
+          ut1=ut1+tsn(3)*uz
+          ut2=bsn(1)*ux+bsn(2)*uy+bsn(3)*uz
+        endif
+        uw=sqrt(ut1*ut1+ut2*ut2)
+        kw=abs(t(ix,iy,iz,e,2))
+        uplus=log(Econ*yplus)/kappa
+        utau=max(uw/uplus,sqrt(sCmu*kw))
+        veddy=kappa*visc*yplus
+        factr=1.0+visc/veddy
+
+        if(uw.lt.upmin) upmin=uw
+
+        tw1=(utau*ut1)/uplus*factr
+        tw2=(utau*ut2)/uplus*factr
+
+        tkewall=utau*utau/sCmu
+        omgwall=kw/veddy
+        tauwall=1./omgwall !veddy/tkewall
+
+c       set traction BC for velocity
+        un  = 0.0
+        tr1 =-tw1
+        tr2 =-tw2
+
+      endif
+
+      if     (ifield.eq.1) then
+        if    (cbv3.eq.'v  ') then
+           ux   = velx !blunt_vel(velx,wd)
+           uy   = vely !blunt_vel(vely,wd)
+           uz = 0.
+        elseif(cbv3.eq.'shl') then
+           trn = 0
+           tr1 =-tw1
+           tr2 =-tw2
+        endif
+      elseif (ifield.eq.2) then
+        temp=0.0
+        flux=1.0
+      elseif (ifield.eq.3) then
+        if    (cbk3.eq.'t  ' .and. cbv3.eq.'shl') then
+           temp= tkewall
+        elseif(cbk3.eq.'t  ' .and. cbv3.eq.'W  ') then
+           temp= 0.
+        elseif(cbk3.eq.'t  ' .and. cbv3.eq.'v  ') then
+           temp= 0.003
+        elseif(cbk3.eq.'f  ') then
+           flux= 0.0 ! flux_kwall
+        endif
+      elseif (ifield.eq.4) then
+        if    (cbo3.eq.'t  ' .and. cbv3.eq.'shl') then
+           temp = tauwall
+        elseif(cbo3.eq.'t  ' .and. cbv3.eq.'W  ') then
+           temp= 0.
+        elseif(cbo3.eq.'t  ' .and. cbv3.eq.'v  ') then
+           temp= 0.1
+        elseif(cbo3.eq.'f  ') then
+           flux = 0. !flux_tauwall
+        endif
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine useric (ix,iy,iz,eg)
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      integer ix,iy,iz,e,eg
+
+      e = gllel(eg)
+
+      ux   = 1.0
+      uy   = 0.0
+      uz   = 0.0
+      temp = 0.0
+
+      if(ifield.eq.3) temp = 0.01
+      if(ifield.eq.4) temp = 0.2
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userchk()
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+
+      real flow_rate,base_flow,dom_len,xsec,scale_vf(3)
+      common /cvflow_r/ flow_rate,base_flow,dom_len,xsec,scale_vf
+
+      real glsc3,bc_average,rans_turbPrandtl
+      real Twall,Tbulk,Nuss
+      real yplus,uplus,Tplus,Econ,kappa,ypCSL,Prt,utau
+      real ptA(3),ptB(3),xmin,xmax,ymin,ymax,zmin,zmax
+      integer ie,ifc,ifld,n
+
+      n= lx1*ly1*lz1*nelv
+
+      call print_limits
+      call scalar_limit(t(1,1,1,1,4),'mu_t')
+
+      Econ = 9.0
+      kappa = 0.4
+      ypCSL = 11.63
+      yplus = 100.0
+      Prt   = rans_turbPrandtl()
+
+      uplus = log(Econ*yplus)/kappa
+      Tplus = ypCSL+Prt/kappa*log(yplus/ypCSL)
+
+      utau  = bc_average(vx,'f  ',2)/uplus
+
+      Tbulk = glsc3(t,vx,bm1,n)
+      Twall = bc_average(t,'f  ',2)+Tplus/utau
+      Nuss  = 1.0/((Twall-Tbulk)*cpfld(2,1))
+      if(nio.eq.0) then
+        write(*,*)"Darcy   = ",2.0*scale_vf(1)
+        write(*,*)"Nusselt = ",Nuss
+      endif 
+
+      if(nsteps.eq.0.or.istep.eq.nsteps) then
+        call domain_size(xmin,xmax,ymin,ymax,zmin,zmax)
+        ptA(1) = 0.5*(xmin+xmax)
+        ptA(2) = ymax
+        ptA(3) = 0.0
+        ptB(1) = 0.5*(xmin+xmax)
+        ptB(2) = ymin
+        ptB(3) = 0.0
+
+        call lineplot(ptA,ptB,1001)
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat   ! This routine to modify element vertices
+      implicit none
+      include 'SIZE'      ! _before_ mesh is generated, which 
+      include 'TOTAL'     ! guarantees GLL mapping of mesh.
+
+      param(54) =-1
+      param(55) = 1.0
+
+      param(120) = nsteps
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat2()
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+
+      real wd, u_tau
+      common /walldist/ wd(lx1,ly1,lz1,lelv), u_tau
+
+      common /rans_usr/ ifld_k, ifld_omega, m_id
+      integer ifld_k,ifld_omega, m_id
+
+      integer w_id,imid,i
+      real coeffs(30) !array for passing your own coeffs
+      logical ifcoeffs
+
+      real w1,w2,w3,w4,w5
+      real el(lx1,ly1,lz1,lelv)
+      common /SCRNS/
+     & w1(lx1*ly1*lz1*lelv)
+     &,w2(lx1*ly1*lz1*lelv)
+     &,w3(lx1*ly1*lz1*lelv)
+     &,w4(lx1*ly1*lz1*lelv)
+     &,w5(lx1*ly1*lz1*lelv)
+
+      ifld_k     = 3 !address of tke equation in t array
+      ifld_omega = 4 !address of omega equation in t array
+      ifcoeffs=.false. !set to true to pass your own coeffs
+
+C     Supported models:
+c      m_id = 0 !regularized standard k-omega (no wall functions)
+c      m_id = 1 !regularized low-Re k-omega (no wall functions)
+c      m_id = 2 !regularized standard k-omega SST (no wall functions)
+c      m_id = 3 !non-regularized standard k-omega (wall functions)
+      m_id = 4 !non-regularized standard k-tau
+c      m_id = 5 !non-regularized low Re k-tau 
+c      m_id = 6 !non-regularized standard k-tau SST
+
+C     Wall distance function:
+      w_id = 0 ! user specified
+c      w_id = 1 ! cheap_dist (path to wall, may work better for periodic boundaries)
+c      w_id = 2 ! distf (coordinate difference, provides smoother function)
+
+c     call cheap_dist(wd,1,'W  ') 
+c      call distf(wd,1,'shl',w1,w2,w3,w4,w5)
+c     call distf2(wd,1,'shl','W  ',w1,w2,w3,w4,w5)
+
+       do i=1,lx1*ly1*lz1*lelv
+          wd(i,1,1,1) = 1.0-ym1(i,1,1,1)
+       enddo
+
+      call rans_init(ifld_k,ifld_omega,ifcoeffs,coeffs,w_id,wd,m_id)
+
+c store del ywd to use for omega BC in userbc 
+      call get_gradywd
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat3()  ! This routine to modify mesh coordinates
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+
+      call count_boundaries
+
+      return
+      end
+c-----------------------------------------------------------------------

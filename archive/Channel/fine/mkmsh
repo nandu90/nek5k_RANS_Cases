@@ -1,0 +1,8 @@
+#! /usr/bin/env bash
+
+genbox <<< chan.box
+mv box.re2 chan.re2
+genmap << EOF
+chan
+0.0001
+EOF

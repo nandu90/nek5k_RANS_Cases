@@ -1,0 +1,138 @@
+#! /usr/bin/env gnuplot
+
+set terminal pdf enhanced dashed
+
+lab1="coarse mesh"
+lab2="medium mesh"
+lab3="fine mesh"
+labr="wall resolved"
+
+file1="coarse/chan.00001.dat"
+file2="med/chan.00001.dat"
+file3="fine/chan.00001.dat"
+filer1="resolved/chan.00001.dat"
+filer2="resolved/chan.00002.dat"
+
+nu=1.0/5.0e4
+
+up1=getValue(2,3,file1)
+up2=getValue(2,3,file2)
+up3=getValue(2,3,file3)
+
+Tp1=getValue(2,6,file1)
+Tp2=getValue(2,6,file2)
+Tp3=getValue(2,6,file3)
+
+Econ=9.0
+kappa=0.4
+ypCSL=11.63
+Prt=0.85
+
+loglaw(y)=log(Econ*y)/kappa
+Tloglaw(y)=ypCSL+Prt/kappa*log(y/ypCSL)
+
+yplus=100.0
+sCmu=0.3
+
+uplus=loglaw(yplus)
+Tplus=Tloglaw(yplus)
+
+ut1=up1/uplus
+ut2=up2/uplus
+ut3=up3/uplus
+utr=4.5180E-02
+
+Tw1=Tplus/ut1+Tp1
+Tw2=Tplus/ut2+Tp2
+Tw3=Tplus/ut3+Tp3
+Twr=getValue(2,6,filer1)
+
+set output "vel.pdf"
+set xlabel "2y/H"
+set xrange [0:1]
+set ylabel "velocity (u/U)"
+set key bottom left
+plot \
+file1 u 2:3 w lines ls 2 title lab1, \
+file2 u 2:3 w lines ls 3 title lab2, \
+file3 u 2:3 w lines ls 4 title lab3, \
+filer1 u 2:3 w lines ls 1 title labr, \
+filer2 u 2:3 w lines ls 1 notitle
+
+set output "temp.pdf"
+set ylabel "temperature (T-T_b)(q''/{/Symbol r}c_pU)"
+set key top left
+plot \
+file1 u 2:6 w lines ls 2 title lab1, \
+file2 u 2:6 w lines ls 3 title lab2, \
+file3 u 2:6 w lines ls 4 title lab3, \
+filer1 u 2:6 w lines ls 1 title labr, \
+filer2 u 2:6 w lines ls 1 notitle
+
+set output "tke.pdf"
+set ylabel "tke"
+plot \
+file1 u 2:7 w lines ls 2 title lab1, \
+file2 u 2:7 w lines ls 3 title lab2, \
+file3 u 2:7 w lines ls 4 title lab3, \
+filer1 u 2:7 w lines ls 1 title labr, \
+filer2 u 2:7 w lines ls 1 notitle
+
+set output "tau.pdf"
+set ylabel "tau"
+set key top right
+plot \
+file1 u 2:8 w lines ls 2 title lab1, \
+file2 u 2:8 w lines ls 3 title lab2, \
+file3 u 2:8 w lines ls 4 title lab3, \
+filer1 u 2:8 w lines ls 1 title labr, \
+filer2 u 2:8 w lines ls 1 notitle
+
+set output "mut.pdf"
+set ylabel "{/Symbol m}_t/{/Symbol m}"
+set key bottom left
+plot \
+file1 u 2:9 w lines ls 2 title lab1, \
+file2 u 2:9 w lines ls 3 title lab2, \
+file3 u 2:9 w lines ls 4 title lab3, \
+filer1 u 2:9 w lines ls 1 title labr, \
+filer2 u 2:9 w lines ls 1 notitle
+
+set output "uplus.pdf"
+set xlabel "y^+"
+set ylabel "u^+"
+set logscale x
+set xrange [1:3000]
+set key top left
+plot \
+file1 u ((1.0-$2)*ut1/nu)+yplus:(($3)/ut1) w lines ls 2 title lab1, \
+file2 u ((1.0-$2)*ut2/nu)+yplus:(($3)/ut2) w lines ls 3 title lab2, \
+file3 u ((1.0-$2)*ut3/nu)+yplus:(($3)/ut3) w lines ls 4 title lab3, \
+filer1 u ((1.0-$2)*utr/nu)      :(($3)/utr) w lines ls 1 title labr, \
+filer2 u ((1.0-$2)*utr/nu)      :(($3)/utr) w lines ls 1 notitle, \
+min(x,loglaw(x)) w lines ls 11 title "law of the wall"
+
+set output "Tplus.pdf"
+set ylabel "T^+"
+plot \
+file1 u ((1.0-$2)*ut1/nu)+yplus:((Tw1-$6)*ut1) w lines ls 2 title lab1, \
+file2 u ((1.0-$2)*ut2/nu)+yplus:((Tw2-$6)*ut2) w lines ls 3 title lab2, \
+file3 u ((1.0-$2)*ut3/nu)+yplus:((Tw3-$6)*ut3) w lines ls 4 title lab3, \
+filer1 u ((1.0-$2)*utr/nu)      :((Twr-$6)*utr) w lines ls 1 title labr, \
+filer2 u ((1.0-$2)*utr/nu)      :((Twr-$6)*utr) w lines ls 1 notitle, \
+min(x,Tloglaw(x)) w lines ls 11 title "law of the wall"
+
+set output "kplus.pdf"
+set ylabel "k^+"
+set key top left
+plot \
+file1 u ((1.0-$2)*ut1/nu)+yplus:(($7)/ut1/ut1) w lines ls 2 title lab1, \
+file2 u ((1.0-$2)*ut2/nu)+yplus:(($7)/ut2/ut2) w lines ls 3 title lab2, \
+file3 u ((1.0-$2)*ut3/nu)+yplus:(($7)/ut3/ut3) w lines ls 4 title lab3, \
+filer1 u ((1.0-$2)*utr/nu)      :(($7)/utr/utr) w lines ls 1 title labr, \
+filer2 u ((1.0-$2)*utr/nu)      :(($7)/utr/utr) w lines ls 1 notitle
+
+#set output "tauplus.pdf"
+#set ylabel "{/Symbol t}^+"
+#plot \
+#datfile u ((1.0-$2)*utau/nu)+yplus:(($8)*utau*utau/nu) w lines ls 2 notitle
