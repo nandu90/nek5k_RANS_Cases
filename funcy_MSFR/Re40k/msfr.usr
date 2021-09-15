@@ -357,7 +357,7 @@ c-----------------------------------------------------------------------
 
 c$$$      call fixcorners('shl','W  ')
 c$$$      call fixcorners('shl','A  ')
-c$$$
+
 c$$$      do iel=1,nelt
 c$$$      do ifc=1,2*ndim
 c$$$         if (cbc(ifc,iel,1) .eq. 'W  ' .or. cbc(ifc,iel,1) .eq. 'v  ')
