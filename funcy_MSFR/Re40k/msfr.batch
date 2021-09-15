@@ -1,0 +1,15 @@
+#!/bin/bash
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=36
+#SBATCH --time=02:00:00
+#SBATCH --output=logfile
+#SBATCH -p bdwall
+export I_MPI_FABRICS=shm:tmi
+export I_MPI_OFI_PROVIDER=psm2
+echo msfr > SESSION.NAME
+echo `pwd`'/' >> SESSION.NAME
+rm -f *.sch
+rm -f ioinfo
+which mpif77 >> logfile
+mpirun ./nek5000
+exit 0;
