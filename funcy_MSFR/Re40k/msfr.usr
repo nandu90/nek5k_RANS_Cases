@@ -323,6 +323,15 @@ c-----------------------------------------------------------------------
       common /walldist/ wd
 
       integer iel, ifc, id_face
+      integer ifld_k,ifld_t,id_m,id_w
+      real coefs(30)
+      logical ifrans_diag
+      real ywdx, ywdy, ywdz, ywdc
+
+      common /gradywd/ ywdx(lx1,ly1,lz1,lelv),ywdy(lx1,ly1,lz1,lelv)
+     $                ,ywdz(lx1,ly1,lz1,lelv),ywdc(lx1,ly1,lz1,lelv)
+
+      logical ifcoefs
 
       do iel=1,nelt
       do ifc=1,2*ndim
@@ -355,41 +364,19 @@ c-----------------------------------------------------------------------
       enddo
       enddo
 
-c$$$      call fixcorners('shl','W  ')
-c$$$      call fixcorners('shl','A  ')
+      call fixcorners('shl','W  ')
+      call fixcorners('shl','A  ')
 
-c$$$      do iel=1,nelt
-c$$$      do ifc=1,2*ndim
-c$$$         if (cbc(ifc,iel,1) .eq. 'W  ' .or. cbc(ifc,iel,1) .eq. 'v  ')
-c$$$     $                                  cbc(ifc,iel,3) = 't  '
-c$$$c         if (cbc(ifc,iel,4) .eq. 't  ') cbc(ifc,iel,4) = 'f  '
-c$$$      enddo
-c$$$      enddo
+      do iel=1,nelt
+      do ifc=1,2*ndim
+         if (cbc(ifc,iel,1) .eq. 'W  ' .or. cbc(ifc,iel,1) .eq. 'v  ')
+     $                                  cbc(ifc,iel,3) = 't  '
+c         if (cbc(ifc,iel,4) .eq. 't  ') cbc(ifc,iel,4) = 'f  '
+      enddo
+      enddo
 
-      return
-      end
-c-----------------------------------------------------------------------
-      subroutine usrdat3()
-
-c      implicit none
-
-      include 'SIZE'
-      include 'TOTAL'
-
-      real wd(lx1,ly1,lz1,lelv)
-      common /walldist/ wd
-
-      integer ifld_k,ifld_t,id_m,id_w
-      real coefs(30)
-      logical ifrans_diag
-      real ywdx, ywdy, ywdz, ywdc
-
-      common /gradywd/ ywdx(lx1,ly1,lz1,lelv),ywdy(lx1,ly1,lz1,lelv)
-     $                ,ywdz(lx1,ly1,lz1,lelv),ywdc(lx1,ly1,lz1,lelv)
-
-      logical ifcoefs
-
-C     initialize the RANS model
+c     ----------------------------------------
+c     initialize the RANS model
       ifld_k = 3 !address of tke
       ifld_t = 4 !address of tau
       ifcoefs = .false.
@@ -422,6 +409,18 @@ c      call count_boundaries
       call gen_rea(2)
 
       if (nio.eq.0) write(*,*)'end of userdat3'
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat3()
+
+c      implicit none
+
+      include 'SIZE'
+      include 'TOTAL'      
+
+      call count_boundaries
 
       return
       end
