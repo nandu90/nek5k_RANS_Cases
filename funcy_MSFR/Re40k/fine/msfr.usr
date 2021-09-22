@@ -1,0 +1,620 @@
+c-----------------------------------------------------------------------
+c  nek5000 user-file template
+c
+c  user specified routines:
+c     - uservp  : variable properties
+c     - userf   : local acceleration term for fluid
+c     - userq   : local source term for scalars
+c     - userbc  : boundary conditions
+c     - useric  : initial conditions
+c     - userchk : general purpose routine for checking errors etc.
+c     - userqtl : thermal divergence for lowMach number flows 
+c     - usrdat  : modify element vertices 
+c     - usrdat2 : modify mesh coordinates
+c     - usrdat3 : general purpose routine for initialization
+c     
+c-----------------------------------------------------------------------
+      include "experimental/rans_komg.f"
+      include "experimental/rans_wallfunctions.f"
+      include "/home/dshaver/NEKSOURCE/usrcode/limits.f"
+      include "/home/dshaver/NEKSOURCE/usrcode/utilities.f"
+      include "/home/dshaver/NEKSOURCE/usrcode/lineplot.f"      
+c-----------------------------------------------------------------------
+      subroutine uservp(ix,iy,iz,eg) ! set variable properties
+c      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+      include 'RANS_KOMG'
+
+      integer ix,iy,iz,eg,e
+      real rans_mut,rans_mutsk,rans_mutso,rans_turbPrandtl
+      e = gllel(eg)
+
+      Pr_t=coeffs(1)
+      mu_t=rans_mut(ix,iy,iz,e)
+
+      utrans = cpfld(ifield,2)
+      if(ifield.eq.1) then
+        udiff = cpfld(ifield,1)+mu_t
+      elseif(ifield.eq.2) then !temperature
+        udiff = cpfld(ifield,1)+mu_t*cpfld(ifield,2)/(Pr_t*cpfld(1,2))
+      elseif(ifield.eq.3) then !tke
+        udiff = cpfld(1,1)+rans_mutsk(ix,iy,iz,e)
+      elseif(ifield.eq.4) then !tau
+        udiff = cpfld(1,1)+rans_mutso(ix,iy,iz,e)
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userf(ix,iy,iz,eg) ! set acceleration term
+c
+c     Note: this is an acceleration term, NOT a force!
+c     Thus, ffx will subsequently be multiplied by rho(x,t).
+c
+c      implicit none
+
+      integer ix,iy,iz,eg
+
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      integer e
+c     e = gllel(eg)
+
+      ffx = 0.0
+      ffy = 0.0
+      ffz = 0.0
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userq(ix,iy,iz,eg) ! set source term
+
+c      implicit none
+
+      integer ix,iy,iz,eg
+
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      integer e
+      e = gllel(eg)
+
+      qvol   = 0.0
+      avol   = 0.0
+      if(ifield.eq.3) then
+        qvol = rans_kSrc(ix,iy,iz,e)
+        avol = rans_kDiag(ix,iy,iz,e)
+      elseif(ifield.eq.4) then
+        qvol = rans_omgSrc(ix,iy,iz,e)
+        avol = rans_omgDiag(ix,iy,iz,e)
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userbc(ix,iy,iz,iside,eg) ! set up boundary conditions
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+c
+      real wd
+      common /walldist/ wd(lx1,ly1,lz1,lelv),upmin
+
+      character*3 cbv3, cbt3, cbk3, cbo3
+
+      integer ix,iy,iz,iside,e,eg
+      real velx,vely,blunt_vel,tol
+      real usn(3),tsn(3),bsn(3),ut1,ut2,uw,utau,kw, u_k
+      real tw1,tw2,tkewall,omgwall,tauwall,sgnut1,sgnut2,utau1
+      real yplus,uplus,Econ,kappa,veddy,visc,factr,sCmu
+      real tke_tmp,tau_tmp,upmin
+
+      e = gllel(eg)
+
+      velx =-1.72845874696*(1-(y-2.0525)*(y-2.0525)/0.01380625)
+      vely = 0.0
+      temp = 0.0
+
+      call turb_in(wd(ix,iy,iz,e),tke_tmp,tau_tmp)
+c      if(ifield.eq.3) temp = tke_tmp
+c      if(ifield.eq.4) temp = tau_tmp
+      pa = 0
+
+      yplus=  30.0
+      Econ = 9.0
+      kappa= 0.4
+      sCmu = 0.3
+      visc=cpfld(1,1)
+
+      cbv3 = cbc(iside,e,1)
+      cbt3 = cbc(iside,e,2)
+      cbk3 = cbc(iside,e,3)
+      cbo3 = cbc(iside,e,4)
+
+      if(cbv3.eq.'shl') then
+        call getangent   (tsn,ix,iy,iz,iside,e)
+        call getbitangent(bsn,ix,iy,iz,iside,e)
+
+        ut1=tsn(1)*ux+tsn(2)*uy
+        ut2=0.0
+        if(if3d) then
+          ut1=ut1+tsn(3)*uz
+          ut2=bsn(1)*ux+bsn(2)*uy+bsn(3)*uz
+        endif
+        uw=sqrt(ut1*ut1+ut2*ut2)
+        kw=abs(ps(1))
+        uplus=log(Econ*yplus)/kappa
+        utau1=uw/uplus
+        u_k = sqrt(sCmu*kw)
+        utau=max(utau1,u_k)
+        veddy=kappa*visc*yplus
+        factr=1.0+visc/veddy
+
+        if(uw.lt.upmin) upmin=uw
+
+c        tw1=(utau*ut1)/uplus*factr
+c        tw2=(utau*ut2)/uplus*factr
+         sgnut1 = sign(1.,ut1)
+         sgnut2 = sign(1.,ut2)
+         tw1=(utau*utau1*sgnut1)*factr ! this is the G-M approach
+         tw2=0. !(utau*utau1*sgnut2)*factr
+
+
+        tkewall=utau*utau/sCmu
+c        tkewall=u_k*u_k/sCmu
+        omgwall=tkewall/veddy
+c        omgwall=kw/veddy
+c        omgwall=u_k*u_k/sCmu/veddy
+
+         tol = 1.e-6
+         if(tkewall.gt.tol) then
+            tauwall=1./omgwall !veddy/tkewall
+            tauwall= min(0.1,tauwall)
+         else
+            tauwall= 0.
+         endif
+
+c       set traction BC for velocity
+        un  = 0.0
+        tr1 =-tw1
+        tr2 =-tw2
+
+c       set Dirichlet BCs for tke and tau
+        if(ifield.eq.3) then
+          temp = tkewall
+          flux = 0.0
+        endif
+        if(ifield.eq.4) temp = tauwall
+      endif
+
+      if     (ifield.eq.1) then
+        if    (cbv3.eq.'v  ') then
+           ux   = velx !blunt_vel(velx,wd)
+           uy   = vely !blunt_vel(vely,wd)
+           uz = 0.
+        elseif(cbv3.eq.'shl') then
+           trn = 0
+           tr1 =-tw1
+           tr2 =-tw2
+        endif
+      elseif (ifield.eq.2) then
+         temp=0.0
+      elseif (ifield.eq.3) then
+        if    (cbk3.eq.'t  ' .and. cbv3.eq.'shl') then
+           temp= tkewall
+           write(*,*) ' WTF is tkewall ', temp
+        elseif(cbk3.eq.'t  ' .and. cbv3.eq.'W  ') then
+           temp= 0.
+        elseif(cbk3.eq.'t  ' .and. cbv3.eq.'v  ') then
+           temp= tke_tmp
+        elseif(cbk3.eq.'f  ') then
+           flux= 0.0 ! flux_kwall
+        endif
+      elseif (ifield.eq.4) then
+        if    (cbo3.eq.'t  ' .and. cbv3.eq.'shl') then
+           temp = tauwall
+        elseif(cbo3.eq.'t  ' .and. cbv3.eq.'W  ') then
+           temp= 0.
+        elseif(cbo3.eq.'t  ' .and. cbv3.eq.'v  ') then
+           temp= tau_tmp
+        elseif(cbo3.eq.'f  ') then
+           flux = 0. !flux_tauwall
+           write(*,*) ' WTF is fluxtau ', x, y, flux
+        endif
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine useric(ix,iy,iz,eg) ! set up initial conditions
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      integer ix,iy,iz,e,eg
+
+      e = gllel(eg)
+
+      ux   = 0.0
+      uy   = 0.0
+      uz   = 0.0
+      temp = 0.0
+
+      if(ifield.eq.3) temp = 0.003
+      if(ifield.eq.4) temp = 0.1
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userchk()
+C      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+
+      common /myoutflow/ d(lx1,ly1,lz1,lelt),m1(lx1*ly1*lz1,lelt)
+      real m1
+
+      real wd
+      common /walldist/ wd(lx1,ly1,lz1,lelv)
+      real norm(3),pt(3),eps,planar_ave_m1,umean
+      real pta(3),ptb(3)
+
+      norm(1) = 1.0
+      norm(2) = 0.0
+      norm(3) = 0.0
+      pt(1) = 0.0
+      pt(2) = 0.0
+      pt(3) = 0.0
+      eps = 0.02
+
+      ifxyo = .false.
+      if (istep.lt.1) then
+        ifxyo = .true.
+c        call outpost2(vx,vy,vz,pr,t,ldimt,'   ')
+      endif
+
+      if(mod(istep,100).eq.0) then
+        call print_limits
+        call y_p_limits(wd,.true.)
+        umean=planar_ave_m1(vx,norm,pt,eps)
+        if(nio.eq.0) then
+          write(6,'(a15,es13.4)') "umean:",umean
+          write(6,*)
+        endif
+      endif
+
+      if(istep.eq.nsteps)then
+         call domain_size(xmin,xmax,ymin,ymax,zmin,zmax)
+         pta(1) = -0.5
+         pta(2) = 1.935
+         pta(3) = 0.
+         ptb(1) = -0.5
+         ptb(2) = 2.17
+         ptb(3) = 0.
+         call lineplot(pta,ptb,1001)
+
+         pta(1) = -0.94
+         pta(2) = 0.5
+         pta(3) = 0.
+         ptb(1) = 0.94
+         ptb(2) = 0.5
+         ptb(3) = 0.
+         call lineplot(pta,ptb,1001)
+
+         pta(1) = 0.5
+         pta(2) = 1.935
+         pta(3) = 0.
+         ptb(1) = 0.5
+         ptb(2) = 2.17
+         ptb(3) = 0.
+         call lineplot(pta,ptb,1001)
+      endif
+      
+Cc turbulent outflow bc
+C      rq  = 4.
+C      uin = 0.
+C      call turb_outflow(d,m1,rq,uin)
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userqtl ! Set thermal divergence
+
+      call userqtl_scig 
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat()   ! This routine to modify element vertices
+
+c      implicit none
+
+      include 'SIZE'
+      include 'TOTAL'
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat2()  ! This routine to modify mesh coordinates
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+
+      real wd(lx1,ly1,lz1,lelv)
+      common /walldist/ wd
+
+      integer iel, ifc, id_face
+      integer ifld_k,ifld_t,id_m,id_w
+      real coefs(30)
+      logical ifrans_diag
+      real ywdx, ywdy, ywdz, ywdc
+
+      common /gradywd/ ywdx(lx1,ly1,lz1,lelv),ywdy(lx1,ly1,lz1,lelv)
+     $                ,ywdz(lx1,ly1,lz1,lelv),ywdc(lx1,ly1,lz1,lelv)
+
+      logical ifcoefs
+
+      do iel=1,nelt
+      do ifc=1,2*ndim
+         id_face = bc(5,ifc,iel,1)
+         cbc(ifc,iel,1) = 'E  '
+         cbc(ifc,iel,2) = 'E  '
+         cbc(ifc,iel,3) = 'E  '
+         cbc(ifc,iel,4) = 'E  '
+         if (id_face.eq.1) then         ! inlet 
+             cbc(ifc,iel,1) = 'v  '
+             cbc(ifc,iel,2) = 't  '
+             cbc(ifc,iel,3) = 't  '
+             cbc(ifc,iel,4) = 't  '
+         elseif (id_face.eq.2) then     ! outlet 
+             cbc(ifc,iel,1) = 'O  '
+             cbc(ifc,iel,2) = 'O  '
+             cbc(ifc,iel,3) = 'O  '
+             cbc(ifc,iel,4) = 'O  '
+         elseif (id_face.eq.3) then     ! wall 
+             cbc(ifc,iel,1) = 'shl'
+             cbc(ifc,iel,2) = 't  '
+             cbc(ifc,iel,3) = 'f  '
+             cbc(ifc,iel,4) = 't  '
+         elseif (id_face.eq.4) then     ! centerline (axisymmetric) 
+             cbc(ifc,iel,1) = 'A  '
+             cbc(ifc,iel,2) = 'A  '
+             cbc(ifc,iel,3) = 'A  '
+             cbc(ifc,iel,4) = 'A  '
+         endif
+      enddo
+      enddo
+
+      call fixcorners('shl','W  ')
+      call fixcorners('shl','A  ')
+
+      do iel=1,nelt
+      do ifc=1,2*ndim
+         if (cbc(ifc,iel,1) .eq. 'W  ' .or. cbc(ifc,iel,1) .eq. 'v  ')
+     $                                  cbc(ifc,iel,3) = 't  '
+c         if (cbc(ifc,iel,4) .eq. 't  ') cbc(ifc,iel,4) = 'f  '
+      enddo
+      enddo
+
+c     ----------------------------------------
+c     initialize the RANS model
+      ifld_k = 3 !address of tke
+      ifld_t = 4 !address of tau
+      ifcoefs = .false.
+      ifrans_diag = .true.
+
+C     Supported models:
+c     id_m = 0 !regularized high-Re k-omega (no wall functions)
+c     id_m = 1 !regularized low-Re k-omega
+c     id_m = 2 !regularized high-Re k-omega SST (no wall functions)
+c     id_m = 3 !regularized low-Re k-omega SST
+      id_m = 4 !standard k-tau
+
+C     Wall distance function:
+c     id_w = 0 ! user specified
+c     id_w = 1 ! cheap_dist (path to wall, may work better for periodic boundaries)
+      id_w = 2 ! distf (coordinate difference, provides smoother function)
+
+      call rans_init(ifld_k,ifld_t,ifcoefs,coefs,id_w,wd,id_m
+     $                  ,'shl')
+
+      call get_gradywd
+      call get_mol_visc
+      ifxyo = .true.
+      call outpost2(ywdx,ywdy,vz,wd,t,3,'ywd')
+      write(*,*) 'WTF 1a getting out of outpost'
+
+c      call count_boundaries
+      write(*,*) 'WTF 2 getting out of count bdries'
+
+      call gen_rea(2)
+
+      if (nio.eq.0) write(*,*)'end of userdat3'
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat3()
+
+c      implicit none
+
+      include 'SIZE'
+      include 'TOTAL'      
+
+      call count_boundaries
+
+      return
+      end
+C-----------------------------------------------------------------------
+      subroutine turb_in(wd,tke,tau)
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+
+      integer ix,iy,iz,e
+      real wd,tke,tau
+
+      real Re,darcy,utau,sigk,kmax,yplus,yk
+
+      Re = 1.0/param(2)
+      darcy = 0.316/(Re**0.25)
+      utau = sqrt(darcy/8.0)
+      sigk = 0.6
+      kmax = 2.5*utau*utau
+      yplus = max(wd*utau*Re,1.0e-6)
+      yk=30.0
+
+      tke=kmax*exp(-(log10(yplus/yk))**2.0/(2.0*sigk**2))
+      tau=0.012*wd**2.0/cpfld(ifield,1)
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine get_mol_visc
+      include 'SIZE'
+      include 'TOTAL'
+
+      common /viscmol/mul   (lx1,ly1,lz1,lelv), mul_dx(lx1,ly1,lz1,lelv)
+     $               ,mul_dy(lx1,ly1,lz1,lelv), mul_dz(lx1,ly1,lz1,lelv)
+      real mul, mul_dx, mul_dy, mul_dz
+
+      integer ix,iy,iz,e,eg
+
+      Re    = 1. /param(2)
+      pi1   = 4.0*atan(1.0)
+
+      write(*,*) 'mu Re ', param(2), Re
+
+      do e =1,nelv
+      do iz=1,nz1
+      do iy=1,ny1
+      do ix=1,nx1
+        xx=xm1(ix,iy,iz,e)
+        mul(ix,iy,iz,e)=1./Re
+      enddo
+      enddo
+      enddo
+      enddo
+
+      call opgrad  (mul_dx,mul_dy,mul_dz,mul)
+      call opdssum (mul_dx,mul_dy,mul_dz)
+      call opcolv  (mul_dx,mul_dy,mul_dz,binvm1)
+
+      write(*,*) 'WTF 1 getting out of get_mol'
+      return
+      end
+
+C-----------------------------------------------------------------------
+      subroutine fixcorners(cbtype1,cbtype2)
+
+c     fixes masks for SYM face corners
+
+      include 'SIZE'
+      include 'INPUT'
+      include 'GEOM'
+      include 'PARALLEL'
+
+      common /scruz/ rmlt(lx1,ly1,lz1,lelv),runx(lx1,ly1,lz1,lelv)
+     $              ,runy(lx1,ly1,lz1,lelv),runz(lx1,ly1,lz1,lelv)
+     $              ,rt1x(lx1,ly1,lz1,lelv),rt1y(lx1,ly1,lz1,lelv)
+     $              ,rt1z(lx1,ly1,lz1,lelv),rt2x(lx1,ly1,lz1,lelv)
+     $              ,rt2y(lx1,ly1,lz1,lelv),rt2z(lx1,ly1,lz1,lelv)
+
+      character*3 cb,cbtype1,cbtype2
+
+      nxyz1= lx1*ly1*lz1
+      ntot1= nxyz1*nelv
+      nfaces = 2*ldim
+      tol  = 1.e-07
+
+      call rzero  (rmlt,    ntot1)
+      call oprzero(runx,runy,runz)
+      call oprzero(rt1x,rt1y,rt1z)
+      call oprzero(rt2x,rt2y,rt2z)
+
+      write(*,*) 'element faces from fixmask2'
+      do 1000 iel=1,nelv
+      ieg = lglel(iel)
+      do 100 iface=1,nfaces
+         cb = cbc(iface,iel,1)
+         if (cb.eq.cbtype1 .or. cb.eq.cbtype2) then
+            call facind(kx1,kx2,ky1,ky2,kz1,kz2,lx1,ly1,lz1,iface)
+            ia = 0
+            do 10 iz=kz1,kz2
+            do 10 iy=ky1,ky2
+            do 10 ix=kx1,kx2
+              ia =ia + 1
+              rmlt(ix,iy,iz,iel)=rmlt(ix,iy,iz,iel)+1.
+              runx(ix,iy,iz,iel)=runx(ix,iy,iz,iel)+unx(ia,1,iface,iel)
+              runy(ix,iy,iz,iel)=runy(ix,iy,iz,iel)+uny(ia,1,iface,iel)
+              rt1x(ix,iy,iz,iel)=rt1x(ix,iy,iz,iel)+t1x(ia,1,iface,iel)
+              rt1y(ix,iy,iz,iel)=rt1y(ix,iy,iz,iel)+t1y(ia,1,iface,iel)
+              rt2x(ix,iy,iz,iel)=rt2x(ix,iy,iz,iel)+t2x(ia,1,iface,iel)
+              rt2y(ix,iy,iz,iel)=rt2y(ix,iy,iz,iel)+t2y(ia,1,iface,iel)
+              if(if3d) then
+               runz(ix,iy,iz,iel)=runz(ix,iy,iz,iel)+unz(ia,1,iface,iel)
+               rt1z(ix,iy,iz,iel)=rt1z(ix,iy,iz,iel)+t1z(ia,1,iface,iel)
+               rt2z(ix,iy,iz,iel)=rt2z(ix,iy,iz,iel)+t2z(ia,1,iface,iel)
+              endif
+ 10         continue
+         endif
+ 100  continue
+ 1000 continue
+
+      call dssum  (rmlt,nx1,ny1,nz1)
+      call opdssum(runx, runy, runz)
+      call opdssum(rt1x, rt1y, rt1z)
+      call opdssum(rt2x, rt2y, rt2z)
+
+      do 2000 iel=1,nelv
+      ieg = lglel(iel)
+      do 200 iface=1,nfaces
+         cb = cbc(iface,iel,1)
+         if (cb.eq.cbtype1 .or. cb.eq.cbtype2) then
+            call facind(kx1,kx2,ky1,ky2,kz1,kz2,lx1,ly1,lz1,iface)
+            ia = 0
+            do 20 iz=kz1,kz2
+            do 20 iy=ky1,ky2
+            do 20 ix=kx1,kx2
+               ia =ia + 1
+               amul = rmlt(ix,iy,iz,iel)
+               runxs= runx(ix,iy,iz,iel)/amul
+               runys= runy(ix,iy,iz,iel)/amul
+               runzs= 0.0
+               rt1xs= rt1x(ix,iy,iz,iel)/amul
+               rt1ys= rt1y(ix,iy,iz,iel)/amul
+               rt1zs= 0.0
+               rt2xs= rt2x(ix,iy,iz,iel)/amul
+               rt2ys= rt2y(ix,iy,iz,iel)/amul
+               rt2zs= 0.0
+               if(if3d) then
+                  runzs= runz(ix,iy,iz,iel)/amul
+                  rt1zs= rt1z(ix,iy,iz,iel)/amul
+                  rt2zs= rt2z(ix,iy,iz,iel)/amul
+               endif
+               unmag = sqrt(runxs*runxs+runys*runys+runzs*runzs)
+               t1mag = sqrt(rt1xs*rt1xs+rt1ys*rt1ys+rt1zs*rt1zs)
+               t2mag = sqrt(rt2xs*rt2xs+rt2ys*rt2ys+rt2zs*rt2zs)
+
+               if((1.0-abs(unmag)).ge.tol) then
+                 write(*,'(4(1X,A),3I5,2(2X,G14.7))') 'converting BC '
+     $            ,cb, ' to ','W  ', ieg, iface, ia, unmag, amul
+
+                 cbc(iface,iel,1) = 'W  '
+               endif
+
+ 20         continue
+         endif
+ 200  continue
+ 2000 continue
+
+      return
+      end
+

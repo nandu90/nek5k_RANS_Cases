@@ -264,6 +264,7 @@ C      implicit none
       real wd
       common /walldist/ wd(lx1,ly1,lz1,lelv)
       real norm(3),pt(3),eps,planar_ave_m1,umean
+      real pta(3),ptb(3)
 
       norm(1) = 1.0
       norm(2) = 0.0
@@ -289,6 +290,33 @@ c        call outpost2(vx,vy,vz,pr,t,ldimt,'   ')
         endif
       endif
 
+      if(istep.eq.nsteps)then
+         call domain_size(xmin,xmax,ymin,ymax,zmin,zmax)
+         pta(1) = -0.5
+         pta(2) = 1.935
+         pta(3) = 0.
+         ptb(1) = -0.5
+         ptb(2) = 2.17
+         ptb(3) = 0.
+         call lineplot(pta,ptb,1001)
+
+         pta(1) = -0.94
+         pta(2) = 0.5
+         pta(3) = 0.
+         ptb(1) = 0.94
+         ptb(2) = 0.5
+         ptb(3) = 0.
+         call lineplot(pta,ptb,1001)
+
+         pta(1) = 0.5
+         pta(2) = 1.935
+         pta(3) = 0.
+         ptb(1) = 0.5
+         ptb(2) = 2.17
+         ptb(3) = 0.
+         call lineplot(pta,ptb,1001)
+      endif
+      
 Cc turbulent outflow bc
 C      rq  = 4.
 C      uin = 0.

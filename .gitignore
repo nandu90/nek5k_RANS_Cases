@@ -6,3 +6,9 @@
 *.state
 *0.f00*
 *makefile
+*run*
+*plot*.dat
+*.old*
+*log*
+*.png
+*SESSION*
