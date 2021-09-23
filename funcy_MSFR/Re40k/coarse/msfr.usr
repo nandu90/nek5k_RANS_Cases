@@ -113,7 +113,7 @@ c
       real usn(3),tsn(3),bsn(3),ut1,ut2,uw,utau,kw, u_k
       real tw1,tw2,tkewall,omgwall,tauwall,sgnut1,sgnut2,utau1
       real yplus,uplus,Econ,kappa,veddy,visc,factr,sCmu
-      real tke_tmp,tau_tmp,upmin
+      real tke_tmp,tau_tmp,upmin,uin
 
       e = gllel(eg)
 
@@ -121,7 +121,7 @@ c
       vely = 0.0
       temp = 0.0
 
-      call turb_in(wd(ix,iy,iz,e),tke_tmp,tau_tmp)
+      call turb_in(wd(ix,iy,iz,e),tke_tmp,tau_tmp,uin,ym1(ix,ix,iz,e))
 c      if(ifield.eq.3) temp = tke_tmp
 c      if(ifield.eq.4) temp = tau_tmp
       pa = 0
@@ -152,7 +152,7 @@ c      if(ifield.eq.4) temp = tau_tmp
         uplus=log(Econ*yplus)/kappa
         utau1=uw/uplus
         u_k = sqrt(sCmu*kw)
-        utau=max(utau1,u_k)
+        utau= max(utau1,u_k)
         veddy=kappa*visc*yplus
         factr=1.0+visc/veddy
 
@@ -172,14 +172,14 @@ c        tkewall=u_k*u_k/sCmu
 c        omgwall=kw/veddy
 c        omgwall=u_k*u_k/sCmu/veddy
 
-         tol = 1.e-6
-         if(tkewall.gt.tol) then
-            tauwall=1./omgwall !veddy/tkewall
-            tauwall= min(0.1,tauwall)
-         else
-            tauwall= 0.
-         endif
-
+        tol = 1.e-8
+        if(tkewall.gt.tol) then
+           tauwall=1./omgwall   !veddy/tkewall
+c           tauwall= min(0.1,tauwall)
+        else
+           tauwall= 0.
+        endif
+        
 c       set traction BC for velocity
         un  = 0.0
         tr1 =-tw1
@@ -195,7 +195,7 @@ c       set Dirichlet BCs for tke and tau
 
       if     (ifield.eq.1) then
         if    (cbv3.eq.'v  ') then
-           ux   = velx !blunt_vel(velx,wd)
+           ux   = uin !blunt_vel(velx,wd)
            uy   = vely !blunt_vel(vely,wd)
            uz = 0.
         elseif(cbv3.eq.'shl') then
@@ -239,6 +239,17 @@ c-----------------------------------------------------------------------
       include 'NEKUSE'
 
       integer ix,iy,iz,e,eg
+      integer icalld
+      save icalld
+      data icalld /0/
+      
+      real tke_in
+      save tke_in
+
+      real tau_in
+      save tau_in
+
+      real uin
 
       e = gllel(eg)
 
@@ -247,8 +258,12 @@ c-----------------------------------------------------------------------
       uz   = 0.0
       temp = 0.0
 
-      if(ifield.eq.3) temp = 0.003
-      if(ifield.eq.4) temp = 0.1
+      if(icalld.eq.0)then
+         call turb_in(-1.,tke_in,tau_in,uin,ym1(ix,iy,iz,e))
+      endif
+
+      if(ifield.eq.3) temp = tke_in
+      if(ifield.eq.4) temp = tau_in
 
       return
       end
@@ -312,6 +327,14 @@ c        call outpost2(vx,vy,vz,pr,t,ldimt,'   ')
          pta(2) = 1.935
          pta(3) = 0.
          ptb(1) = 0.5
+         ptb(2) = 2.17
+         ptb(3) = 0.
+         call lineplot(pta,ptb,1001)
+
+         pta(1) = -0.3399
+         pta(2) = 1.935
+         pta(3) = 0.
+         ptb(1) = -0.3399
          ptb(2) = 2.17
          ptb(3) = 0.
          call lineplot(pta,ptb,1001)
@@ -392,16 +415,16 @@ c-----------------------------------------------------------------------
       enddo
       enddo
 
-      call fixcorners('shl','W  ')
-      call fixcorners('shl','A  ')
+c      call fixcorners('shl','W  ')
+c      call fixcorners('shl','A  ')
 
-      do iel=1,nelt
-      do ifc=1,2*ndim
-         if (cbc(ifc,iel,1) .eq. 'W  ' .or. cbc(ifc,iel,1) .eq. 'v  ')
-     $                                  cbc(ifc,iel,3) = 't  '
-c         if (cbc(ifc,iel,4) .eq. 't  ') cbc(ifc,iel,4) = 'f  '
-      enddo
-      enddo
+c      do iel=1,nelt
+c      do ifc=1,2*ndim
+c         if (cbc(ifc,iel,1) .eq. 'W  ' .or. cbc(ifc,iel,1) .eq. 'v  ')
+c     $                                  cbc(ifc,iel,3) = 't  '
+cc         if (cbc(ifc,iel,4) .eq. 't  ') cbc(ifc,iel,4) = 'f  '
+c      enddo
+c      enddo
 
 c     ----------------------------------------
 c     initialize the RANS model
@@ -453,7 +476,7 @@ c      implicit none
       return
       end
 C-----------------------------------------------------------------------
-      subroutine turb_in(wd,tke,tau)
+      subroutine turb_in(wd,tke,tau,uin,yin)
       implicit none
       include 'SIZE'
       include 'TOTAL'
@@ -462,6 +485,10 @@ C-----------------------------------------------------------------------
       real wd,tke,tau
 
       real Re,darcy,utau,sigk,kmax,yplus,yk
+      real kappa,econ,uplus,tkewall,tauwall,sCmu,veddy,omgwall
+      real uin,velx,yin
+      
+      velx =-1.72845874696*(1-(yin-2.0525)*(yin-2.0525)/0.01380625)
 
       Re = 1.0/param(2)
       darcy = 0.316/(Re**0.25)
@@ -471,8 +498,26 @@ C-----------------------------------------------------------------------
       yplus = max(wd*utau*Re,1.0e-6)
       yk=30.0
 
-      tke=kmax*exp(-(log10(yplus/yk))**2.0/(2.0*sigk**2))
-      tau=0.012*wd**2.0/cpfld(ifield,1)
+      kappa = 0.4
+      econ = 9.0
+      sCmu = 0.3
+      uplus = (1./kappa)*log(econ*yk)
+      tkewall = utau*utau/sCmu
+      veddy = kappa*cpfld(1,1)*yk
+      omgwall = tkewall/veddy
+      tauwall = 1./omgwall
+      if(wd.lt.0.)then
+         tke = tkewall
+         tau = tauwall
+         return
+      endif
+c      write(*,*)utau,uplus,uplus*utau,tkewall,tauwall
+c      call exit(1)
+      
+      uin = min(velx,-uplus*utau)
+      
+      tke= tkewall !kmax*exp(-(log10(yplus/yk))**2.0/(2.0*sigk**2))
+      tau= tauwall !0.012*wd**2.0/cpfld(ifield,1)
 
       return
       end
