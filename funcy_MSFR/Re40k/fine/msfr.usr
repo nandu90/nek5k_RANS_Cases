@@ -257,13 +257,9 @@ c-----------------------------------------------------------------------
       uy   = 0.0
       uz   = 0.0
       temp = 0.0
-
-      if(icalld.eq.0)then
-         call turb_in(-1.,tke_in,tau_in,uin,ym1(ix,iy,iz,e))
-      endif
-
-      if(ifield.eq.3) temp = tke_in
-      if(ifield.eq.4) temp = tau_in
+      
+      if(ifield.eq.3) temp = 0.003
+      if(ifield.eq.4) temp = 0.1
 
       return
       end
@@ -415,16 +411,16 @@ c-----------------------------------------------------------------------
       enddo
       enddo
 
-c      call fixcorners('shl','W  ')
-c      call fixcorners('shl','A  ')
+      call fixcorners('shl','W  ')
+      call fixcorners('shl','A  ')
 
-c      do iel=1,nelt
-c      do ifc=1,2*ndim
-c         if (cbc(ifc,iel,1) .eq. 'W  ' .or. cbc(ifc,iel,1) .eq. 'v  ')
-c     $                                  cbc(ifc,iel,3) = 't  '
-cc         if (cbc(ifc,iel,4) .eq. 't  ') cbc(ifc,iel,4) = 'f  '
-c      enddo
-c      enddo
+      do iel=1,nelt
+      do ifc=1,2*ndim
+         if (cbc(ifc,iel,1) .eq. 'W  ' .or. cbc(ifc,iel,1) .eq. 'v  ')
+     $                                  cbc(ifc,iel,3) = 't  '
+c         if (cbc(ifc,iel,4) .eq. 't  ') cbc(ifc,iel,4) = 'f  '
+      enddo
+      enddo
 
 c     ----------------------------------------
 c     initialize the RANS model
@@ -487,7 +483,8 @@ C-----------------------------------------------------------------------
       real Re,darcy,utau,sigk,kmax,yplus,yk
       real kappa,econ,uplus,tkewall,tauwall,sCmu,veddy,omgwall
       real uin,velx,yin
-      
+      real yplusmax,newy,hwidth,ywd
+
       velx =-1.72845874696*(1-(yin-2.0525)*(yin-2.0525)/0.01380625)
 
       Re = 1.0/param(2)
@@ -495,30 +492,24 @@ C-----------------------------------------------------------------------
       utau = sqrt(darcy/8.0)
       sigk = 0.6
       kmax = 2.5*utau*utau
-      yplus = max(wd*utau*Re,1.0e-6)
+      yplus = max(wd*utau*Re,1e-6)
       yk=30.0
-
-      kappa = 0.4
-      econ = 9.0
-      sCmu = 0.3
-      uplus = (1./kappa)*log(econ*yk)
-      tkewall = utau*utau/sCmu
-      veddy = kappa*cpfld(1,1)*yk
-      omgwall = tkewall/veddy
-      tauwall = 1./omgwall
-      if(wd.lt.0.)then
-         tke = tkewall
-         tau = tauwall
-         return
-      endif
-c      write(*,*)utau,uplus,uplus*utau,tkewall,tauwall
-c      call exit(1)
       
-      uin = min(velx,-uplus*utau)
+c     New profile
+      hwidth = 0.235/2.0
+      yplus = yplus+30.0
+      yplusmax = hwidth*utau*Re
+      if(yplus.gt.yplusmax)yplus = yplusmax
+      newy = yplus/(utau*Re)
+      newy = hwidth-newy
       
-      tke= tkewall !kmax*exp(-(log10(yplus/yk))**2.0/(2.0*sigk**2))
-      tau= tauwall !0.012*wd**2.0/cpfld(ifield,1)
-
+      uin = -1.72845874696*(1-newy*newy/0.01380625)
+      uin = uin*0.7857112082619868 !To keep Re same at core
+      
+      tke = kmax*exp(-(log10(yplus/yk))**2.0/(2.0*sigk**2))
+      ywd = newy-hwidth
+      tau = 0.012*ywd**2.0/cpfld(ifield,1)
+      
       return
       end
 c-----------------------------------------------------------------------
