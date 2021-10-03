@@ -3,10 +3,9 @@
 startFrom = msfr.old
 stopAt = numSteps
 numSteps = 200000
-dt = 50.0e-6
+dt = 2.0e-5
 writeInterval = 10000
 timeStepper = BDF2
-targetCFL = 0.75
 
 [PROBLEMTYPE]
 equation = incompNS

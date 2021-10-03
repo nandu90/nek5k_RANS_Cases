@@ -166,16 +166,16 @@ c        tw2=(utau*ut2)/uplus*factr
          tw2=0. !(utau*utau1*sgnut2)*factr
 
 
-        tkewall=utau*utau/sCmu
+        tkewall= utau*utau/sCmu
 c        tkewall=u_k*u_k/sCmu
         omgwall=tkewall/veddy
 c        omgwall=kw/veddy
 c        omgwall=u_k*u_k/sCmu/veddy
 
-        tol = 1.e-8
+        tol = 1.e-6
         if(tkewall.gt.tol) then
            tauwall=1./omgwall   !veddy/tkewall
-c           tauwall= min(0.1,tauwall)
+           tauwall= min(0.1,tauwall)
         else
            tauwall= 0.
         endif
@@ -337,9 +337,9 @@ c        call outpost2(vx,vy,vz,pr,t,ldimt,'   ')
       endif
       
 Cc turbulent outflow bc
-C      rq  = 4.
-C      uin = 0.
-C      call turb_outflow(d,m1,rq,uin)
+      rq  = 4.
+      uin = 0.
+      call turb_outflow(d,m1,rq,uin)
 
       return
       end
