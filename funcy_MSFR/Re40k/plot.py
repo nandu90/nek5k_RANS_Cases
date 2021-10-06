@@ -8,7 +8,7 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 def plotnow(fname,xlabel,ylabel,x,y,labels,ptype='line'):
-    default_cycler = (cycler(color=['k','b','r','g','g'])*\
+    default_cycler = (cycler(color=['k','b','r','c','g'])*\
                       cycler(linestyle=['-'])*cycler(marker=['']))
     plt.rc('lines',linewidth=1)
     plt.rc('axes',prop_cycle=default_cycler)
@@ -68,14 +68,21 @@ def main():
     temp = []
     sc1 = []
     sc2 = []
-    cases = ['coarse','fine']
-    pltname = 'plot3.dat'
+    cases = ['coarse','coarse_6','coarse_8','wallResolved']
+    cases = ['fine','fine_6','fine_8','wallResolved']
+    cases = ['wallResolved','../Re1M/wallResolved']
+    labels = ['coarse,lx1=4','coarse,lx1=6','coarse,lx1=8','wallResolved,lx1=8']
+    labels = ['fine,lx1=4','fine,lx1=6','fine,lx1=8','wallResolved,lx1=8']
+    labels = ['Re=40k','Re=1M']
+
+    pltname = 'plot2.dat'
     for i in range(len(cases)):
         getdata(cases[i],pltname,x,y,vx,vy,p,temp,sc1,sc2)
 
-    labels = cases
-    plotnow('U_x0.5','$y$','$U$',y,vx,labels)
-    plotnow('tke_x0.5','$y$','$k$',y,sc1,labels)
+    labels = labels
+    plotnow(cases[0]+'_U_y0.5','$x$$','$U$',x,vx,labels)
+    plotnow(cases[0]+'_tke_y0.5','$x$','$k$',x,sc1,labels)
+    plotnow(cases[0]+'_tau_y0.5','$x$','$\\tau$',x,sc2,labels)
 
     # yplus = (H-y)*utau/nu
     # uplus = vx/utau
