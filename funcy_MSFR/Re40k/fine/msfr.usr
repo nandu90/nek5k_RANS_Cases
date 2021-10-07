@@ -108,12 +108,20 @@ c
 
       character*3 cbv3, cbt3, cbk3, cbo3
 
+      common /gradywd/ ywdx(lx1,ly1,lz1,lelv),ywdy(lx1,ly1,lz1,lelv)
+     $                ,ywdz(lx1,ly1,lz1,lelv),ywdc(lx1,ly1,lz1,lelv)
+      real ywdx, ywdy, ywdz, ywdc
+
+      real ydx, ydy, ydz, ydn
+
       integer ix,iy,iz,iside,e,eg
       real velx,vely,blunt_vel,tol
-      real usn(3),tsn(3),bsn(3),ut1,ut2,uw,utau,kw, u_k
+      real usn(3),tsn(3),bsn(3),ut1,ut2,uw,utau,kw, u_k,tauw
       real tw1,tw2,tkewall,omgwall,tauwall,sgnut1,sgnut2,utau1
-      real yplus,uplus,Econ,kappa,veddy,visc,factr,sCmu
-      real tke_tmp,tau_tmp,upmin,uin
+      real yplus,uplus,Econ,kappa,veddy,visc,factr,factro,sCmu
+      real tke_tmp,tau_tmp,upmin,sgnydn
+
+      real flux_kwall, flux_tauwall
 
       e = gllel(eg)
 
@@ -121,7 +129,7 @@ c
       vely = 0.0
       temp = 0.0
 
-      call turb_in(wd(ix,iy,iz,e),tke_tmp,tau_tmp,uin,ym1(ix,ix,iz,e))
+      call turb_in(wd(ix,iy,iz,e),tke_tmp,tau_tmp)
 c      if(ifield.eq.3) temp = tke_tmp
 c      if(ifield.eq.4) temp = tau_tmp
       pa = 0
@@ -137,6 +145,16 @@ c      if(ifield.eq.4) temp = tau_tmp
       cbk3 = cbc(iside,e,3)
       cbo3 = cbc(iside,e,4)
 
+      call getSnormal  (usn,ix,iy,iz,iside,e)
+      ydx = ywdx(ix,iy,iz,e)
+      ydy = ywdy(ix,iy,iz,e)
+      ydz = ywdz(ix,iy,iz,e)
+      if(if3d) then
+         ydn= usn(1)*ydx+ usn(2)*ydy+ usn(3)*ydz
+      else
+         ydn= usn(1)*ydx+ usn(2)*ydy
+      endif
+
       if(cbv3.eq.'shl') then
         call getangent   (tsn,ix,iy,iz,iside,e)
         call getbitangent(bsn,ix,iy,iz,iside,e)
@@ -149,12 +167,14 @@ c      if(ifield.eq.4) temp = tau_tmp
         endif
         uw=sqrt(ut1*ut1+ut2*ut2)
         kw=abs(ps(1))
+        tauw=abs(ps(2))
         uplus=log(Econ*yplus)/kappa
         utau1=uw/uplus
         u_k = sqrt(sCmu*kw)
-        utau= max(utau1,u_k)
+        utau=max(utau1,u_k)
         veddy=kappa*visc*yplus
         factr=1.0+visc/veddy
+        factro= 0.5 + visc/veddy ! 1. + visc/(0.5*veddy) sigma_w=2
 
         if(uw.lt.upmin) upmin=uw
 
@@ -172,14 +192,20 @@ c        tkewall=u_k*u_k/sCmu
 c        omgwall=kw/veddy
 c        omgwall=u_k*u_k/sCmu/veddy
 
-        tol = 1.e-8
-        if(tkewall.gt.tol) then
-           tauwall=1./omgwall   !veddy/tkewall
-c           tauwall= min(0.1,tauwall)
-        else
-           tauwall= 0.
-        endif
-        
+         tol = 1.e-6
+         if(tkewall.gt.tol) then
+            tauwall=1./omgwall !veddy/tkewall
+            tauwall= min(0.1,tauwall)
+         else
+            tauwall= 0.
+         endif
+
+         sgnydn = sign(1.,ydn)
+         flux_kwall= 0.0
+c         flux_tauwall=0.5*(sCmu*kappa*veddy/u_k)*sgnydn*factro ! this should be veddy*dtau/dy
+         flux_tauwall=kappa*u_k*tauw*sgnydn*factro ! this should be veddy*dtau/dy
+c         write(*,*) 'WTF is flux_tauwall ', u_k,tauw,sgnydn,factro
+
 c       set traction BC for velocity
         un  = 0.0
         tr1 =-tw1
@@ -195,7 +221,7 @@ c       set Dirichlet BCs for tke and tau
 
       if     (ifield.eq.1) then
         if    (cbv3.eq.'v  ') then
-           ux   = uin !blunt_vel(velx,wd)
+           ux   = velx !blunt_vel(velx,wd)
            uy   = vely !blunt_vel(vely,wd)
            uz = 0.
         elseif(cbv3.eq.'shl') then
@@ -208,13 +234,13 @@ c       set Dirichlet BCs for tke and tau
       elseif (ifield.eq.3) then
         if    (cbk3.eq.'t  ' .and. cbv3.eq.'shl') then
            temp= tkewall
-           write(*,*) ' WTF is tkewall ', temp
+c           write(*,*) ' WTF is tkewall ', temp
         elseif(cbk3.eq.'t  ' .and. cbv3.eq.'W  ') then
            temp= 0.
         elseif(cbk3.eq.'t  ' .and. cbv3.eq.'v  ') then
            temp= tke_tmp
         elseif(cbk3.eq.'f  ') then
-           flux= 0.0 ! flux_kwall
+           flux= flux_kwall
         endif
       elseif (ifield.eq.4) then
         if    (cbo3.eq.'t  ' .and. cbv3.eq.'shl') then
@@ -224,8 +250,8 @@ c       set Dirichlet BCs for tke and tau
         elseif(cbo3.eq.'t  ' .and. cbv3.eq.'v  ') then
            temp= tau_tmp
         elseif(cbo3.eq.'f  ') then
-           flux = 0. !flux_tauwall
-           write(*,*) ' WTF is fluxtau ', x, y, flux
+           flux = flux_tauwall
+c           write(*,*) ' WTF is fluxtau ', x, y, flux
         endif
       endif
 
@@ -239,17 +265,6 @@ c-----------------------------------------------------------------------
       include 'NEKUSE'
 
       integer ix,iy,iz,e,eg
-      integer icalld
-      save icalld
-      data icalld /0/
-      
-      real tke_in
-      save tke_in
-
-      real tau_in
-      save tau_in
-
-      real uin
 
       e = gllel(eg)
 
@@ -257,7 +272,7 @@ c-----------------------------------------------------------------------
       uy   = 0.0
       uz   = 0.0
       temp = 0.0
-      
+
       if(ifield.eq.3) temp = 0.003
       if(ifield.eq.4) temp = 0.1
 
@@ -288,10 +303,10 @@ C      implicit none
       ifxyo = .false.
       if (istep.lt.1) then
         ifxyo = .true.
-c        call outpost2(vx,vy,vz,pr,t,ldimt,'   ')
+        call outpost2(vx,vy,vz,pr,t,ldimt,'   ')
       endif
 
-      if(mod(istep,100).eq.0) then
+      if(mod(istep, 10).eq.0) then
         call print_limits
         call y_p_limits(wd,.true.)
         umean=planar_ave_m1(vx,norm,pt,eps)
@@ -335,7 +350,6 @@ c        call outpost2(vx,vy,vz,pr,t,ldimt,'   ')
          ptb(3) = 0.
          call lineplot(pta,ptb,1001)
       endif
-      
 Cc turbulent outflow bc
 C      rq  = 4.
 C      uin = 0.
@@ -370,15 +384,6 @@ c-----------------------------------------------------------------------
       common /walldist/ wd
 
       integer iel, ifc, id_face
-      integer ifld_k,ifld_t,id_m,id_w
-      real coefs(30)
-      logical ifrans_diag
-      real ywdx, ywdy, ywdz, ywdc
-
-      common /gradywd/ ywdx(lx1,ly1,lz1,lelv),ywdy(lx1,ly1,lz1,lelv)
-     $                ,ywdz(lx1,ly1,lz1,lelv),ywdc(lx1,ly1,lz1,lelv)
-
-      logical ifcoefs
 
       do iel=1,nelt
       do ifc=1,2*ndim
@@ -400,8 +405,8 @@ c-----------------------------------------------------------------------
          elseif (id_face.eq.3) then     ! wall 
              cbc(ifc,iel,1) = 'shl'
              cbc(ifc,iel,2) = 't  '
-             cbc(ifc,iel,3) = 'f  '
-             cbc(ifc,iel,4) = 't  '
+             cbc(ifc,iel,3) = 't  '
+             cbc(ifc,iel,4) = 'f  '
          elseif (id_face.eq.4) then     ! centerline (axisymmetric) 
              cbc(ifc,iel,1) = 'A  '
              cbc(ifc,iel,2) = 'A  '
@@ -411,6 +416,7 @@ c-----------------------------------------------------------------------
       enddo
       enddo
 
+      if (ifstrs) call fixmska1 (v1mask,v2mask,v3mask)
       call fixcorners('shl','W  ')
       call fixcorners('shl','A  ')
 
@@ -418,12 +424,46 @@ c-----------------------------------------------------------------------
       do ifc=1,2*ndim
          if (cbc(ifc,iel,1) .eq. 'W  ' .or. cbc(ifc,iel,1) .eq. 'v  ')
      $                                  cbc(ifc,iel,3) = 't  '
+         if (cbc(ifc,iel,1) .eq. 'W  ' .or. cbc(ifc,iel,1) .eq. 'v  ')
+     $                                  cbc(ifc,iel,4) = 't  '
 c         if (cbc(ifc,iel,4) .eq. 't  ') cbc(ifc,iel,4) = 'f  '
       enddo
       enddo
 
-c     ----------------------------------------
-c     initialize the RANS model
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat3()
+
+c      implicit none
+
+      include 'SIZE'
+      include 'TOTAL'
+
+      real wd(lx1,ly1,lz1,lelv)
+      common /walldist/ wd
+
+      real w1,w2,w3,w4,w5
+      real el(lx1,ly1,lz1,lelv)
+      common /SCRNS/
+     & w1(lx1*ly1*lz1*lelv)
+     &,w2(lx1*ly1*lz1*lelv)
+     &,w3(lx1*ly1*lz1*lelv)
+     &,w4(lx1*ly1*lz1*lelv)
+     &,w5(lx1*ly1*lz1*lelv)
+
+      integer e
+      integer ifld_k,ifld_t,id_m,id_w
+      real coefs(30)
+      logical ifrans_diag
+      real ywdx, ywdy, ywdz, ywdc
+
+      common /gradywd/ ywdx(lx1,ly1,lz1,lelv),ywdy(lx1,ly1,lz1,lelv)
+     $                ,ywdz(lx1,ly1,lz1,lelv),ywdc(lx1,ly1,lz1,lelv)
+
+      logical ifcoefs
+
+C     initialize the RANS model
       ifld_k = 3 !address of tke
       ifld_t = 4 !address of tau
       ifcoefs = .false.
@@ -437,17 +477,23 @@ c     id_m = 3 !regularized low-Re k-omega SST
       id_m = 4 !standard k-tau
 
 C     Wall distance function:
-c     id_w = 0 ! user specified
+      id_w = 0 ! user specified
 c     id_w = 1 ! cheap_dist (path to wall, may work better for periodic boundaries)
-      id_w = 2 ! distf (coordinate difference, provides smoother function)
+c      id_w = 2 ! distf (coordinate difference, provides smoother function)
 
+      call distf2(wd,1,'shl','W  ',w1,w2,w3,w4,w5)
       call rans_init(ifld_k,ifld_t,ifcoefs,coefs,id_w,wd,id_m
-     $                  ,'shl')
+     $                  ,ifrans_diag,'shl')
+
+      do e=1,nelv
+        call cfill(el(1,1,1,e),real(lglel(e)),nx1*ny1*nz1)
+      enddo
+c      call outpost(el,wd,vz,t,pr,'ywd')
 
       call get_gradywd
       call get_mol_visc
       ifxyo = .true.
-      call outpost2(ywdx,ywdy,vz,wd,t,3,'ywd')
+      call outpost2(ywdx,ywdy,vz,wd,el,1,'ywd')
       write(*,*) 'WTF 1a getting out of outpost'
 
 c      call count_boundaries
@@ -459,20 +505,8 @@ c      call count_boundaries
 
       return
       end
-c-----------------------------------------------------------------------
-      subroutine usrdat3()
-
-c      implicit none
-
-      include 'SIZE'
-      include 'TOTAL'      
-
-      call count_boundaries
-
-      return
-      end
 C-----------------------------------------------------------------------
-      subroutine turb_in(wd,tke,tau,uin,yin)
+      subroutine turb_in(wd,tke,tau)
       implicit none
       include 'SIZE'
       include 'TOTAL'
@@ -481,35 +515,18 @@ C-----------------------------------------------------------------------
       real wd,tke,tau
 
       real Re,darcy,utau,sigk,kmax,yplus,yk
-      real kappa,econ,uplus,tkewall,tauwall,sCmu,veddy,omgwall
-      real uin,velx,yin
-      real yplusmax,newy,hwidth,ywd
-
-      velx =-1.72845874696*(1-(yin-2.0525)*(yin-2.0525)/0.01380625)
 
       Re = 1.0/param(2)
       darcy = 0.316/(Re**0.25)
       utau = sqrt(darcy/8.0)
       sigk = 0.6
       kmax = 2.5*utau*utau
-      yplus = max(wd*utau*Re,1e-6)
+      yplus = max(wd*utau*Re,1.0e-6)
       yk=30.0
-      
-c     New profile
-      hwidth = 0.235/2.0
-      yplus = yplus+30.0
-      yplusmax = hwidth*utau*Re
-      if(yplus.gt.yplusmax)yplus = yplusmax
-      newy = yplus/(utau*Re)
-      newy = hwidth-newy
-      
-      uin = -1.72845874696*(1-newy*newy/0.01380625)
-      uin = uin*0.7857112082619868 !To keep Re same at core
-      
-      tke = kmax*exp(-(log10(yplus/yk))**2.0/(2.0*sigk**2))
-      ywd = newy-hwidth
-      tau = 0.012*ywd**2.0/cpfld(ifield,1)
-      
+
+      tke=kmax*exp(-(log10(yplus/yk))**2.0/(2.0*sigk**2))
+      tau=0.012*wd**2.0/cpfld(ifield,1)
+
       return
       end
 c-----------------------------------------------------------------------

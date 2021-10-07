@@ -68,19 +68,22 @@ def main():
     temp = []
     sc1 = []
     sc2 = []
-    cases = ['coarse','coarse_6','coarse_8','wallResolved']
+    #cases = ['coarse','coarse_6','coarse_8','wallResolved']
     cases = ['fine','fine_6','fine_8','wallResolved']
-    cases = ['wallResolved','../Re1M/wallResolved']
-    labels = ['coarse,lx1=4','coarse,lx1=6','coarse,lx1=8','wallResolved,lx1=8']
-    labels = ['fine,lx1=4','fine,lx1=6','fine,lx1=8','wallResolved,lx1=8']
-    labels = ['Re=40k','Re=1M']
+    #cases = ['wallResolved','../Re1M/wallResolved']
+    cases = ['coarse_8','fine_8','wallResolved']
+
+    #labels = ['coarse,lx1=4','coarse,lx1=6','coarse,lx1=8','wallResolved,lx1=8']
+    #labels = ['fine,lx1=4','fine,lx1=6','fine,lx1=8','wallResolved,lx1=8']
+    labels = ['coarse,lx1=8','fine,lx1=8','wallResolved,lx1=8']
+    #labels = ['Re=40k','Re=1M']
 
     pltname = 'plot2.dat'
     for i in range(len(cases)):
         getdata(cases[i],pltname,x,y,vx,vy,p,temp,sc1,sc2)
 
     labels = labels
-    plotnow(cases[0]+'_U_y0.5','$x$$','$U$',x,vx,labels)
+    plotnow(cases[0]+'_U_y0.5','$x$','$U$',x,vx,labels)
     plotnow(cases[0]+'_tke_y0.5','$x$','$k$',x,sc1,labels)
     plotnow(cases[0]+'_tau_y0.5','$x$','$\\tau$',x,sc2,labels)
 
