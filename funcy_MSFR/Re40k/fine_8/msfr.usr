@@ -16,9 +16,9 @@ c
 c-----------------------------------------------------------------------
       include "experimental/rans_komg.f"
       include "experimental/rans_wallfunctions.f"
-      include "/home/dshaver/NEKSOURCE/usrcode/limits.f"
-      include "/home/dshaver/NEKSOURCE/usrcode/utilities.f"
-      include "/home/dshaver/NEKSOURCE/usrcode/lineplot.f"      
+      include "experimental/limits.f"
+      include "experimental/utilities.f"
+      include "experimental/lineplot.f"      
 c-----------------------------------------------------------------------
       subroutine uservp(ix,iy,iz,eg) ! set variable properties
 c      implicit none
