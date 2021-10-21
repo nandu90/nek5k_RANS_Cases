@@ -186,8 +186,7 @@ c     tw2=(utau*ut2)/uplus*factr
          tw2=0.                 !(utau*utau1*sgnut2)*factr
          
          tkewall=utau*utau/sCmu
-         tkewall = uc*uc/sCmu
-         
+                  
 c     tkewall=u_k*u_k/sCmu
          omgwall=tkewall/veddy
 c     omgwall=kw/veddy
@@ -204,7 +203,7 @@ c     omgwall=u_k*u_k/sCmu/veddy
          sgnydn = sign(1.,ydn)
          flux_kwall= 0.0
 c         flux_tauwall=0.5*(sCmu*kappa*veddy/u_k)*sgnydn*factro ! this should be veddy*dtau/dy
-         flux_tauwall=kappa*uc*tauw*sgnydn*factro ! this should be veddy*dtau/dy
+         flux_tauwall=kappa*utau*tauw*sgnydn*factro ! this should be veddy*dtau/dy
 c         write(*,*) 'WTF is flux_tauwall ', u_k,tauw,sgnydn,factro
 
 c       set traction BC for velocity
@@ -219,7 +218,8 @@ c       set Dirichlet BCs for tke and tau
         endif
         if(ifield.eq.4) temp = tauwall
 
-        call unifiedWallFunc(ix,iy,iz,e,tw1,tkewall,flux_tauwall)
+        call unifiedWallFunc(ix,iy,iz,iside,e,tw1,tkewall,flux_tauwall)
+        flux_tauwall = abs(flux_tauwall)*sgnydn
       endif
 
       if     (ifield.eq.1) then
@@ -717,6 +717,7 @@ c
       pstau = abs(ps(2))
 
       utau = sqrt(sqrt(cmu)*psk)
+      if(utau .lt. 1e-6)utau=1e-6
 
       dpx = dpdx(ix,iy,iz,e)
       dpy = dpdy(ix,iy,iz,e)
@@ -734,13 +735,17 @@ c
       endif
       dpt = sqrt(dpt1*dpt1+dpt2*dpt2)
       up = (cpfld(1,1)/cpfld(1,2)**2)*(dpt**(1./3.))
-
+      if(up.lt.1e-6)up=1e-6
+      
+      
       uc = utau+up
 
       sgndpt1 = sign(1.,dpt1)
       c2 = (up/uc)*(alpha*log(up/uc)+beta)
       up_plus = sgndpt1*(alpha*(up/uc)*log(yplus)+c2)
-            
+
+c      write(*,*)up_plus,up,uc,utau,c2
+      
 !Tangential velocity
       ut1=tsn(1)*ux+tsn(2)*uy
       ut2=0.0
@@ -762,22 +767,26 @@ c
       tauw = tauw/((1./kappa)*(utau/uc)*log(yplus)+c1)
 
 !     Momentum BC - Shih 1999, Eq. 37
-      tw1 = tauw/cpfld(1,2) + sgndpt1*(up**3/uc)*yplus
+      tw1 = tauw/cpfld(1,2) - sgndpt1*(up**3/uc)*yplus
             
 !     Eddy Viscosity
       eddy = (yplus*cpfld(1,1)/uc)
-      eddy = abs(eddy*(sgnut1*utau*kappa + sgndpt1*up*alpha*kappa**2))
+      eddy = abs(eddy*(sgnut1*utau*kappa - sgndpt1*up*alpha*kappa**2))
      
 !     TKE
       tke = utau**2. + (up*alpha*kappa)**2.
-      tke = tke + 2.*utau*up*alpha*kappa*sgnut1*sgndpt1
+      tke = tke - 2.*utau*up*alpha*kappa*sgnut1*sgndpt1
       tke = tke/sqrt(cmu)
+      tke = min(2.0,abs(tke))
+      
       
 !     Flux for tau
-      dtaudyk = sgnut1*utau*kappa + sgndpt1*up*alpha*kappa**2
+      dtaudyk = sgnut1*utau*kappa - sgndpt1*up*alpha*kappa**2
       sigma_w = 0.5
       flux_tau = (1./sigma_w)*dtaudyk*pstau
-            
+
+c      write(*,*)tw1,tke,flux_tau
+
       return
       end
 c---------------------------------------------------------------------
