@@ -243,7 +243,7 @@ c           write(*,*) ' WTF is tkewall ', temp
         elseif(cbk3.eq.'t  ' .and. cbv3.eq.'v  ') then
            temp= tke_tmp
         elseif(cbk3.eq.'f  ') then
-           flux= flux_kwall
+           flux= 0.0
         endif
       elseif (ifield.eq.4) then
         if    (cbo3.eq.'t  ' .and. cbv3.eq.'shl') then
@@ -767,21 +767,21 @@ c      write(*,*)up_plus,up,uc,utau,c2
       tauw = tauw/((1./kappa)*(utau/uc)*log(yplus)+c1)
 
 !     Momentum BC - Shih 1999, Eq. 37
-      tw1 = tauw/cpfld(1,2) - sgndpt1*(up**3/uc)*yplus
+      tw1 = tauw/cpfld(1,2) + sgndpt1*(up**3/uc)*yplus
             
 !     Eddy Viscosity
       eddy = (yplus*cpfld(1,1)/uc)
-      eddy = abs(eddy*(sgnut1*utau*kappa - sgndpt1*up*alpha*kappa**2))
+      eddy = abs(eddy*(sgnut1*utau*kappa + sgndpt1*up*alpha*kappa**2))
      
 !     TKE
       tke = utau**2. + (up*alpha*kappa)**2.
-      tke = tke - 2.*utau*up*alpha*kappa*sgnut1*sgndpt1
+      tke = tke + 2.*utau*up*alpha*kappa*sgnut1*sgndpt1
       tke = tke/sqrt(cmu)
       tke = min(2.0,abs(tke))
       
       
 !     Flux for tau
-      dtaudyk = sgnut1*utau*kappa - sgndpt1*up*alpha*kappa**2
+      dtaudyk = sgnut1*utau*kappa + sgndpt1*up*alpha*kappa**2
       sigma_w = 0.5
       flux_tau = (1./sigma_w)*dtaudyk*pstau
 
