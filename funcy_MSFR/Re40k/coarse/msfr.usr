@@ -777,7 +777,7 @@ c
       utau = sqrt(abs(tauw)/cpfld(1,2))
       
 !     G-M approach
-c      utau = max(u_k,utau)
+c      utau = max(u_k,utau)   !Does not give good results
 
 !     Momentum BC - Shih 1999, Eq. 37
       tw1 = tauw/cpfld(1,2) + sgndpt1*(up**3./uc)*yplus
@@ -791,7 +791,6 @@ c      utau = max(u_k,utau)
 
 !     TKE
       tke = sqrt(cmu)*(omegay*kappa)**2.0
-      tke = min(2.0,abs(tke))
      
 !     Flux for tau
       dtaudyk = sgnut1*utau*kappa + sgndpt1*up*alpha*kappa**2
