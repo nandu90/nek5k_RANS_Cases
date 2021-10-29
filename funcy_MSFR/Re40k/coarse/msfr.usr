@@ -777,7 +777,7 @@ c
       utau = sqrt(abs(tauw)/cpfld(1,2))
       
 !     G-M approach
-      utau = max(u_k,utau)
+c      utau = max(u_k,utau)
 
 !     Momentum BC - Shih 1999, Eq. 37
       tw1 = tauw/cpfld(1,2) + sgndpt1*(up**3./uc)*yplus
@@ -796,7 +796,12 @@ c
 !     Flux for tau
       dtaudyk = sgnut1*utau*kappa + sgndpt1*up*alpha*kappa**2
       sigma_w = 0.5
-      factr =  1./sigma_w !+ cpfld(1,1)/eddy
+      if(eddy.lt.cpfld(1,1))then
+         factr =  1./sigma_w    !+ cpfld(1,1)/eddy
+      else
+         factr = 1./sigma_w + cpfld(1,1)/eddy
+      endif
+      
       flux_tau = factr*dtaudyk*pstau
 
 c      write(*,*)utau,up,up_plus,tke,tw1,flux_tau
