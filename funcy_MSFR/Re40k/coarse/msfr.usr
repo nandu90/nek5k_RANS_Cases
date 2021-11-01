@@ -419,7 +419,7 @@ c-----------------------------------------------------------------------
          elseif (id_face.eq.3) then     ! wall 
              cbc(ifc,iel,1) = 'shl'
              cbc(ifc,iel,2) = 't  '
-             cbc(ifc,iel,3) = 't  '
+             cbc(ifc,iel,3) = 'f  '
              cbc(ifc,iel,4) = 'f  '
          elseif (id_face.eq.4) then     ! centerline (axisymmetric) 
              cbc(ifc,iel,1) = 'A  '
