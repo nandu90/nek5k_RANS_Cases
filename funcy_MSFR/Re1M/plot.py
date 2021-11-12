@@ -8,7 +8,7 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 def plotnow(fname,xlabel,ylabel,x,y,labels,ptype='line'):
-    default_cycler = (cycler(color=['k','b','r','c','g','m'])*\
+    default_cycler = (cycler(color=['k','b','r','c','g'])*\
                       cycler(linestyle=['-'])*cycler(marker=['']))
     plt.rc('lines',linewidth=1)
     plt.rc('axes',prop_cycle=default_cycler)
@@ -29,7 +29,7 @@ def plotnow(fname,xlabel,ylabel,x,y,labels,ptype='line'):
             ax.loglog(x[i],y[i],label=labels[i])
 
     ax.grid()
-    ax.legend(loc='best',fontsize=12)
+    ax.legend(loc='best',fontsize=15)
     fig.savefig(fname+'.png',quality=100,\
                 bbox_inches='tight',dpi=100)
     plt.close()
@@ -71,11 +71,11 @@ def main():
     #cases = ['coarse','coarse_6','coarse_8','wallResolved']
     cases = ['fine','fine_6','fine_8','wallResolved']
     #cases = ['wallResolved','../Re1M/wallResolved']
-    cases = ['coarse','coarse_6','coarse_8','coarse_10','../../../../nek5k_RANS_Cases/funcy_MSFR/Re40k/coarse','wallResolved']
+    cases = ['wallResolved']
 
     #labels = ['coarse,lx1=4','coarse,lx1=6','coarse,lx1=8','wallResolved,lx1=8']
     #labels = ['fine,lx1=4','fine,lx1=6','fine,lx1=8','wallResolved,lx1=8']
-    labels = ['coarse,GWF,lx1=4','coarse,GWF,lx1=6','coarse,GWF,lx1=8','coarse,GWF,lx1=10','coarse,SWF,lx1=4','wallResolved,lx1=8']
+    labels = ['wallResolved,lx1=8']
     #labels = ['Re=40k','Re=1M']
 
     pltname = 'plot3.dat'

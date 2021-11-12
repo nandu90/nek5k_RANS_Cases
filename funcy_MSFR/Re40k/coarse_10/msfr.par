@@ -1,9 +1,9 @@
 #Nek5000 parameter file
 [GENERAL]
-#startFrom = msfr.old
+startFrom = msfr_8.old
 stopAt = numSteps
-numSteps = 200000
-dt = 2.5e-5
+numSteps = 100000
+dt = 50.0e-6
 writeInterval = 10000
 timeStepper = BDF2
 targetCFL = 0.75

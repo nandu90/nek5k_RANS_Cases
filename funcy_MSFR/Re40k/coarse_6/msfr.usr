@@ -194,13 +194,8 @@ c     omgwall=u_k*u_k/sCmu/veddy
          
          tol = 1.e-6
          if(tkewall.gt.tol) then
-<<<<<<< HEAD
-            tauwall=1./omgwall !veddy/tkewall
-c            tauwall= min(0.1,tauwall)
-=======
             tauwall=1./omgwall  !veddy/tkewall
             tauwall= min(0.1,tauwall)
->>>>>>> prgradient2
          else
             tauwall= 0.
          endif
