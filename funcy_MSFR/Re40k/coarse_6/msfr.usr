@@ -219,7 +219,7 @@ c       set Dirichlet BCs for tke and tau
         if(ifield.eq.4) temp = tauwall
 
         call unifiedWallFunc(ix,iy,iz,iside,e,tw1,tkewall,flux_tauwall)
-        flux_tauwall = abs(flux_tauwall)*sgnydn
+        flux_tauwall = flux_tauwall*sgnydn
       endif
 
       if     (ifield.eq.1) then
@@ -363,9 +363,9 @@ C      implicit none
          call lineplot(pta,ptb,1001)
       endif
 Cc turbulent outflow bc
-C      rq  = 4.
-C      uin = 0.
-C      call turb_outflow(d,m1,rq,uin)
+      rq  = 4.
+      uin = 0.
+      call turb_outflow(d,m1,rq,uin)
 
       
       
@@ -696,7 +696,8 @@ c
       integer ix,iy,iz,e,iside
 
       real tsn(3),bsn(3)
-      real yplus,kappa,c1,cmu,c
+      real yplus,kappa,cmu,c
+      real alpha,beta
       real psk,pstau
 
       common /pgrads/ dpdx(lx1,ly1,lz1,lelt),dpdy(lx1,ly1,lz1,lelt),
@@ -733,19 +734,19 @@ c
          dpt2 = bsn(1)*dpx+bsn(2)*dpy+bsn(2)*dpz
       endif
       dpt = sqrt(dpt1*dpt1+dpt2*dpt2)
-      up = ((cpfld(1,1)/cpfld(1,2)**2)*dpt)**(1./3.)
+      up = ((cpfld(1,1)/cpfld(1,2)**2.0)*dpt)**(1./3.)
       sgndpt1 = sign(1.,dpt1)
       
 !     utau
       u_k = abs((psk*sqrt(cmu))**0.5 - sgndpt1*up*alpha*kappa)
-      utau = max(1e-6,u_k)
+      utau = max(1e-8,u_k)
 
 
 !     Combined velocity scale
       uc = utau+up
 
 !     Normalized Pressure gradient velocity     
-      if(up/utau .lt. 1e-4)then
+      if(up/utau .lt. 1e-8)then
          up_plus = 0.
       else
          c2 = (up/uc)*(alpha*log(up/uc)+beta)
@@ -774,7 +775,7 @@ c
       tauw = tauw/((1./kappa)*(utau/uc)*log(yplus)+c1)
 
 !     Friction velocity from wall shear
-      utau = sqrt(abs(tauw)/cpfld(1,2))
+c      utau = sqrt(abs(tauw)/cpfld(1,2))
       
 !     G-M approach
 c      utau = max(u_k,utau)   !Does not give good results
@@ -784,18 +785,18 @@ c      utau = max(u_k,utau)   !Does not give good results
             
 !     Eddy Viscosity
       eddy = (yplus*cpfld(1,1)/uc)
-      eddy = abs(eddy*(sgnut1*utau*kappa + sgndpt1*up*alpha*kappa**2))
+      eddy = eddy*abs(sgnut1*utau*kappa + sgndpt1*up*alpha*kappa**2.0)
      
 !     Omega*y
-      omegay = sqrt(1./cmu)*(sgnut1*(utau/kappa) + sgndpt1*up*alpha)
+      omegay = sqrt(1./cmu)*abs(sgnut1*(utau/kappa) + sgndpt1*up*alpha)
 
 !     TKE
       tke = sqrt(cmu)*(omegay*kappa)**2.0
      
 !     Flux for tau
-      dtaudyk = sgnut1*utau*kappa + sgndpt1*up*alpha*kappa**2
+      dtaudyk = abs(sgnut1*utau*kappa + sgndpt1*up*alpha*kappa**2.0)
       sigma_w = 0.5
-      if(eddy.lt.cpfld(1,1))then
+      if(eddy.lt.1e-8)then
          factr =  1./sigma_w    !+ cpfld(1,1)/eddy
       else
          factr = 1./sigma_w + cpfld(1,1)/eddy
