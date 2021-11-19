@@ -123,6 +123,12 @@ c
 
       real flux_kwall, flux_tauwall,twnew,uc
 
+      real myuin,kin,tauin
+      common /inarrs/ 
+     $     myuin(lx1,ly1,lz1,lelt),
+     $     kin(lx1,ly1,lz1,lelt),
+     $     tauin(lx1,ly1,lz1,lelt)
+
       e = gllel(eg)
 
       velx =-1.72845874696*(1-(y-2.0525)*(y-2.0525)/0.01380625)
@@ -194,7 +200,7 @@ c     omgwall=u_k*u_k/sCmu/veddy
          
          tol = 1.e-6
          if(tkewall.gt.tol) then
-            tauwall=1./omgwall  !veddy/tkewall
+           tauwall=1./omgwall  !veddy/tkewall
             tauwall= min(0.1,tauwall)
          else
             tauwall= 0.
@@ -224,8 +230,8 @@ c       set Dirichlet BCs for tke and tau
 
       if     (ifield.eq.1) then
         if    (cbv3.eq.'v  ') then
-           ux   = velx !blunt_vel(velx,wd)
-           uy   = vely !blunt_vel(vely,wd)
+           ux   = myuin(ix,iy,iz,e) !blunt_vel(velx,wd)
+           uy   = 0.0 !blunt_vel(vely,wd)
            uz = 0.
         elseif(cbv3.eq.'shl') then
            trn = 0
@@ -241,7 +247,7 @@ c           write(*,*) ' WTF is tkewall ', temp
         elseif(cbk3.eq.'t  ' .and. cbv3.eq.'W  ') then
            temp= 0.
         elseif(cbk3.eq.'t  ' .and. cbv3.eq.'v  ') then
-           temp= tke_tmp
+           temp= kin(ix,iy,iz,e)
         elseif(cbk3.eq.'f  ') then
            flux= 0.0
         endif
@@ -251,7 +257,7 @@ c           write(*,*) ' WTF is tkewall ', temp
         elseif(cbo3.eq.'t  ' .and. cbv3.eq.'W  ') then
            temp= 0.
         elseif(cbo3.eq.'t  ' .and. cbv3.eq.'v  ') then
-           temp= tau_tmp
+           temp= tauin(ix,iy,iz,e)
         elseif(cbo3.eq.'f  ') then
            flux = flux_tauwall
 c           write(*,*) ' WTF is fluxtau ', x, y, flux
@@ -299,6 +305,22 @@ C      implicit none
      $     dpdz(lx1,ly1,lz1,lelt)
       real dpdx,dpdy,dpdz
 
+      real myuin,kin,tauin
+      common /inarrs/ 
+     $     myuin(lx1,ly1,lz1,lelt),
+     $     kin(lx1,ly1,lz1,lelt),
+     $     tauin(lx1,ly1,lz1,lelt)
+
+      nxyz = lx1*ly1*lz1
+      ntot = nxyz*nelt
+
+      if(istep.eq.0)then
+         call gfldr('msfr.bare')
+         call copy(myuin,vx,ntot)         
+         call copy(kin,t(1,1,1,1,2),ntot)
+         call copy(tauin,t(1,1,1,1,3),ntot)
+      endif
+      
       call gradm1(dpdx,dpdy,dpdz,pr)
       call opcolv(dpdx,dpdy,dpdz,bm1)
       call opdssum(dpdx,dpdy,dpdz)
