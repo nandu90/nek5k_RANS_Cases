@@ -619,7 +619,7 @@ c
       
       integer ix,iy,iz,e,iside
 
-      real tsn(3),bsn(3)
+      real tsn(3),bsn(3),usn(3)
 
       common /shihparam/ yplus,kappa,cmu,c,alpha,beta
       real yplus,kappa,cmu,c,alpha,beta
@@ -656,17 +656,29 @@ c
       dpx = dpdx(ix,iy,iz,e)
       dpy = dpdy(ix,iy,iz,e)
       dpz = dpdz(ix,iy,iz,e)
+
+      call getSnormal(usn,ix,iy,iz,iside,e)
+      if(if3d)then
+         dpn = dpx*usn(1)+dpy*usn(2)+dpz*usn(3)
+      else
+         dpn = dpx*usn(1)+dpy*usn(3)
+      endif
+
+!     Pressure gradient vector on tangent surface
+      dptx = dpx-dpn*usn(1)
+      dpty = dpy-dpn*usn(2)
+      dptz = dpz-dpn*usn(3)
       
       call getangent   (tsn,ix,iy,iz,iside,e)
       call getbitangent(bsn,ix,iy,iz,iside,e)
            
 !     Dot products of pressure gradient with
 !     tangent and bi-tangent vectors
-      dpt1 = tsn(1)*dpx+tsn(2)*dpy
+      dpt1 = tsn(1)*dptx+tsn(2)*dpty
       dpt2 = 0.0      
       if(if3d)then
-         dpt1 = dpt1+tsn(3)*dpz
-         dpt2 = bsn(1)*dpx+bsn(2)*dpy+bsn(3)*dpz
+         dpt1 = dpt1+tsn(3)*dptz
+         dpt2 = bsn(1)*dptx+bsn(2)*dpty+bsn(3)*dptz
       endif
       dpt = sqrt(dpt1*dpt1+dpt2*dpt2)
       up = ((cpfld(1,1)/cpfld(1,2)**2.0)*dpt)**(1./3.)
@@ -686,59 +698,64 @@ c
 
 !     Find angle b/w pressure and wall shear vectors
       if(icalld .eq. 0)then
-         psi(ix,iy,iz,e) = acos(sgndpt1)
+         call rzero(psi,lx1*ly1*lz1*nelt)
+         icalld = 1
       endif
 
       call anglebetwixt(psk,up,uw,psi(ix,iy,iz,e),nid)
 
-!     utau
-      u_k = abs((psk*sqrt(cmu))**0.5 - sgndpt1*up*alpha*kappa)
-      utau = max(1e-8,u_k)
-
+      call getplusvel(psk,up,utau,utau_plus,up_plus,psi(is,iy,iz,e))
 
 !     Combined velocity scale
       uc = utau+up
 
-!     Normalized Pressure gradient velocity     
-      if(up/utau .lt. 1e-8)then
-         up_plus = 0.
+!     Press grad components along t1,t2
+      if(up.gt.1e-8)then
+         upplus_t1 = up_plus*dpt1/dpt
+         upplus_t2 = up_plus*dpt2/dpt
       else
-         c2 = (up/uc)*(alpha*log(up/uc)+beta)
-         up_plus = sgndpt1*(alpha*(up/uc)*log(yplus)+c2)
+         upplus_t1 = 0.
+         upplus_t2 = 0.
       endif
 
-!     Normalized tangential velocity
-      uplus = sgnut1*uw/uc
+!     Tangential velocity components along t1,t2
+      uplus_t1 = ut1/uc
+      uplus_t2 = ut2/uc
 
-!     Normalized friction velocity
-      utau_plus = uplus-up_plus
-
+!     Wall shear velocity components along t1,t2
+      utauplus_t1 = uplus_t1-upplus_t1
+      utauplus_t2 = uplus_t2-upplus_t2
+      
 !     Wall shear
       c1 = (utau/uc)*((1./kappa)*log(utau/uc) + c)
-      tauw = utau_plus*cpfld(1,2)*utau**2.
+      tauw = cpfld(1,2)*utau**2.
       tauw = tauw/((1./kappa)*(utau/uc)*log(yplus)+c1)
-
-!     Friction velocity from wall shear
-c      utau = sqrt(abs(tauw)/cpfld(1,2))
-      
-!     G-M approach
-c      utau = max(u_k,utau)   !Does not give good results
+      tauw_t1 = utauplus_t1*tauw
+      tauw_t2 = utauplus_t2*tauw
 
 !     Momentum BC - Shih 1999, Eq. 37
-      tw1 = tauw/cpfld(1,2) + sgndpt1*(up**3./uc)*yplus
-            
-!     Eddy Viscosity
-      eddy = (yplus*cpfld(1,1)/uc)
-      eddy = eddy*abs(sgnut1*utau*kappa + sgndpt1*up*alpha*kappa**2.0)
-     
-!     Omega*y
-      omegay = sqrt(1./cmu)*abs(sgnut1*(utau/kappa) + sgndpt1*up*alpha)
+      if(up .gt. 1e-8)then
+         tw1 = tauw_t1/cpfld(1,2) + (dpt1/dpt)*(up**3./uc)*yplus
+         tw2 = tauw_t2/cpfld(1,2) + (dpt2/dpt)*(up**3./uc)*yplus
+      else
+         tw1 = tauw_t1/cpfld(1,2)
+         tw2 = tauw_t2/cpfld(1,2)         
+      endif
+      if(.not.if3d)tw2=0.0
 
+!     sqrt(Tke*sqrt(cmu))
+      scmuk = utau**2.0+(up*alpha*kappa)**2.0
+     $     +(2.0*utau*up*alpha*kappa*cos(psi(ix,iy,iz,e)))
+      scmuk = sqrt(abs(scmuk))
+      
+!     Eddy Viscosity
+      eddy = (yplus*cpfld(1,1)*kappa/uc)*scmuk
+  
 !     TKE
-      tke = sqrt(cmu)*(omegay*kappa)**2.0
+      tke = scmuk**2.0/sqrt(cmu)
      
 !     Flux for tau
-      dtaudyk = abs(sgnut1*utau*kappa + sgndpt1*up*alpha*kappa**2.0)
+      dtaudyk = kappa*scmuk
       sigma_w = 0.5
       if(eddy.lt.1e-8)then
          factr =  1./sigma_w    !+ cpfld(1,1)/eddy
@@ -748,6 +765,11 @@ c      utau = max(u_k,utau)   !Does not give good results
       
       flux_tau = factr*dtaudyk*pstau
 
+      if(flux_tau.ne.flux_tau)then
+         write(*,*)scmuk,flux_tau,utau**2.0+(up*alpha*kappa)**2.0,
+     $        (2.0*utau*up*alpha*kappa*cos(psi(ix,iy,iz,e)))
+         call exit(1)
+      endif
 c      write(*,*)utau,up,up_plus,tke,tw1,flux_tau
       return
       end
@@ -772,27 +794,20 @@ c---------------------------------------------------------------------
       real tol
       integer itmax,i
 
+      real psior
 
       tol = 1e-8
-      itmax = 2
+      itmax = 3
 
+      psior = psi
+      
       do i=1,itmax
          psiold = psi
 
-         disc = sqrt(psk*sqrt(cmu)-(up*alpha*kappa*sin(psi))**2.)
-         b = up*alpha*kappa*cos(psi)
+         call getplusvel(psk,up,utau,utauplus,upplus,psi)
+
+         uc=utau+up
          
-         root1 = -b + disc
-         root2 = -b - disc
-         
-         utau = abs(root1) !max(root1,root2)
-         uc = utau + up
-         
-         c1 = (utau/uc)*((1./kappa)*log(utau/uc) + c)
-         c2 = (up/uc)*(alpha*log(up/uc)+beta)
-         
-         utauplus = (1./kappa)*(utau/uc)*log(yplus) + c1
-         upplus = alpha*(up/uc)*log(yplus) + c2
          uplus = uw/uc
          
          cospsi = uplus**2. - utauplus**2.0 - upplus**2.0
@@ -808,18 +823,56 @@ c---------------------------------------------------------------------
          cpsiold = cos(psiold)
          
          if(abs(cospsi-cpsiold) .lt. tol)then
-            exit
-            write(*,*)"Converged in ",i-1
+c            write(*,*)"Converged in ",i,cos(psi),cos(psior)
+            exit            
          else
-            if(nid.eq.0)then
+            if(cospsi .ne. cospsi)then
                write(*,*)i,psi,psiold,cospsi
                write(*,*)utau,up,uc,root1,root2
             endif
-            psiold = psi            
+c            write(*,*)i,psi,psiold
+            psiold = psi
+            if(cospsi .ne. cospsi)call exit(1)
          endif
       enddo
-      
-      call exit(1)
+     
       return
       end
 c---------------------------------------------------------------------      
+      subroutine getplusvel(psk,up,utau,utauplus,upplus,psi)
+
+      common /shihparam/ yplus,kappa,cmu,c,alpha,beta
+      real yplus,kappa,cmu,c,alpha,beta
+
+      real psk,up,utau,utauplus,upplus,psi
+
+      real disc,b,root1,root2
+
+      real uc
+      real c1,c2
+
+      disc = sqrt(psk*sqrt(cmu)-(up*alpha*kappa*sin(psi))**2.)
+
+      if(disc.ne.disc)disc = 0.
+         
+      b = up*alpha*kappa*cos(psi)
+      
+      root1 = -b + disc
+      root2 = -b - disc
+      
+      utau = abs(root1)         !max(root1,root2)
+      utau = max(1e-8,utau)
+      uc = utau + up
+      
+      c1 = (utau/uc)*((1./kappa)*log(utau/uc) + c)
+      utauplus = (1./kappa)*(utau/uc)*log(yplus) + c1
+      
+      if(up/utau .lt. 1e-8)then
+         upplus = 0.
+      else
+         c2 = (up/uc)*(alpha*log(up/uc)+beta)
+         upplus = alpha*(up/uc)*log(yplus) + c2
+      endif
+         
+      return
+      end      
