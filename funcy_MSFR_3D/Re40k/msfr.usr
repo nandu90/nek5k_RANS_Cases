@@ -123,12 +123,6 @@ c
 
       real flux_kwall, flux_tauwall,twnew,uc
 
-      real myuin,kin,tauin
-      common /inarrs/ 
-     $     myuin(lx1,ly1,lz1,lelt),
-     $     kin(lx1,ly1,lz1,lelt),
-     $     tauin(lx1,ly1,lz1,lelt)
-
       e = gllel(eg)
 
       cbv3 = cbc(iside,e,1)
@@ -136,19 +130,8 @@ c
       cbk3 = cbc(iside,e,3)
       cbo3 = cbc(iside,e,4)
 
-      if(cbv3.eq.'W  ')then
-         ux = 0.
-         uy = 0.
-         uz = 0.
-         temp = 0.
-      elseif(cbv3.eq.'v  ')then
-         ux = 0.
-         uy = 0.
-         uz = 0.
-         temp = 1e-4
-      endif
-      return
-
+      call inletprofiles(ix,iy,iz,e,vely,tke_tmp,tau_tmp)
+      
       call getSnormal  (usn,ix,iy,iz,iside,e)
       ydx = ywdx(ix,iy,iz,e)
       ydy = ywdy(ix,iy,iz,e)
@@ -169,8 +152,8 @@ c
 
       if     (ifield.eq.1) then
         if    (cbv3.eq.'v  ') then
-           ux   = myuin(ix,iy,iz,e) !blunt_vel(velx,wd)
-           uy   = 0.0 !blunt_vel(vely,wd)
+           ux   = 0.0
+           uy   = vely 
            uz = 0.
         elseif(cbv3.eq.'shl') then
            trn = 0
@@ -178,7 +161,7 @@ c
            tr2 =-tw2
         endif
       elseif (ifield.eq.2) then
-         temp=0.0
+         temp = wd(ix,iy,iz,e)
       elseif (ifield.eq.3) then
         if    (cbk3.eq.'t  ' .and. cbv3.eq.'shl') then
            temp= tkewall
@@ -186,7 +169,7 @@ c           write(*,*) ' WTF is tkewall ', temp
         elseif(cbk3.eq.'t  ' .and. cbv3.eq.'W  ') then
            temp= 0.
         elseif(cbk3.eq.'t  ' .and. cbv3.eq.'v  ') then
-           temp= kin(ix,iy,iz,e)
+           temp= tke_tmp
         elseif(cbk3.eq.'f  ') then
            flux= 0.0
         endif
@@ -196,7 +179,7 @@ c           write(*,*) ' WTF is tkewall ', temp
         elseif(cbo3.eq.'t  ' .and. cbv3.eq.'W  ') then
            temp= 0.
         elseif(cbo3.eq.'t  ' .and. cbv3.eq.'v  ') then
-           temp= tauin(ix,iy,iz,e)
+           temp= tau_tmp
         elseif(cbo3.eq.'f  ') then
            flux = flux_tauwall
 c           write(*,*) ' WTF is fluxtau ', x, y, flux
@@ -213,6 +196,8 @@ c-----------------------------------------------------------------------
       include 'NEKUSE'
 
       integer ix,iy,iz,e,eg
+      real wd
+      common /walldist/ wd(lx1,ly1,lz1,lelv)
 
       e = gllel(eg)
 
@@ -221,6 +206,7 @@ c-----------------------------------------------------------------------
       uz   = 0.0
       temp = 0.0
 
+      if(ifield.eq.2) temp = wd(ix,iy,iz,e)
       if(ifield.eq.3) temp = 1e-4
       if(ifield.eq.4) temp = 1e-4
 
@@ -244,29 +230,16 @@ C      implicit none
      $     dpdz(lx1,ly1,lz1,lelt)
       real dpdx,dpdy,dpdz
 
-      real myuin,kin,tauin
-      common /inarrs/ 
-     $     myuin(lx1,ly1,lz1,lelt),
-     $     kin(lx1,ly1,lz1,lelt),
-     $     tauin(lx1,ly1,lz1,lelt)
-
       nxyz = lx1*ly1*lz1
       ntot = nxyz*nelt
-
-      if(istep.eq.0)then
-c         call gfldr('msfr.bare')
-         call copy(myuin,vx,ntot)         
-         call copy(kin,t(1,1,1,1,2),ntot)
-         call copy(tauin,t(1,1,1,1,3),ntot)
-      endif
       
       call gradm1(dpdx,dpdy,dpdz,pr)
       call opcolv(dpdx,dpdy,dpdz,bm1)
       call opdssum(dpdx,dpdy,dpdz)
       call opcolv(dpdx,dpdy,dpdz,binvm1)
       
-      norm(1) = 1.0
-      norm(2) = 0.0
+      norm(1) = 0.0
+      norm(2) = 1.0
       norm(3) = 0.0
       pt(1) = 0.0
       pt(2) = 0.0
@@ -282,54 +255,18 @@ c         call gfldr('msfr.bare')
       if(mod(istep, 10).eq.0) then
         call print_limits
         call y_p_limits(wd,.true.)
-        umean=planar_ave_m1(vx,norm,pt,eps)
+        umean=planar_ave_m1(vy,norm,pt,eps)
         if(nio.eq.0) then
           write(6,'(a15,es13.4)') "umean:",umean
           write(6,*)
         endif
       endif
 
-      if(istep.eq.nsteps)then
-         call domain_size(xmin,xmax,ymin,ymax,zmin,zmax)
-         pta(1) = -0.5
-         pta(2) = 1.935
-         pta(3) = 0.
-         ptb(1) = -0.5
-         ptb(2) = 2.17
-         ptb(3) = 0.
-         call lineplot(pta,ptb,1001)
-
-         pta(1) = -0.94
-         pta(2) = 0.5
-         pta(3) = 0.
-         ptb(1) = 0.94
-         ptb(2) = 0.5
-         ptb(3) = 0.
-         call lineplot(pta,ptb,1001)
-
-         pta(1) = 0.5
-         pta(2) = 1.935
-         pta(3) = 0.
-         ptb(1) = 0.5
-         ptb(2) = 2.17
-         ptb(3) = 0.
-         call lineplot(pta,ptb,1001)
-
-         pta(1) = -0.3399
-         pta(2) = 1.935
-         pta(3) = 0.
-         ptb(1) = -0.3399
-         ptb(2) = 2.17
-         ptb(3) = 0.
-         call lineplot(pta,ptb,1001)
-      endif
 Cc turbulent outflow bc
       rq  = 4.
       uin = 0.
       call turb_outflow(d,m1,rq,uin)
-
-      
-      
+     
       return
       end
 c-----------------------------------------------------------------------
@@ -378,26 +315,26 @@ c-----------------------------------------------------------------------
              cbc(ifc,iel,3) = 'O  '
              cbc(ifc,iel,4) = 'O  '
          elseif (id_face.eq.3) then     ! wall 
-             cbc(ifc,iel,1) = 'W  '
+             cbc(ifc,iel,1) = 'shl'
              cbc(ifc,iel,2) = 't  '
-             cbc(ifc,iel,3) = 't  '
-             cbc(ifc,iel,4) = 't  '
+             cbc(ifc,iel,3) = 'f  '
+             cbc(ifc,iel,4) = 'f  '
           endif
       enddo
       enddo
 
-c$$$      if (ifstrs) call fixmska1 (v1mask,v2mask,v3mask)
-c$$$      call fixcorners('shl','W  ')
-c$$$      
-c$$$      do iel=1,nelt
-c$$$      do ifc=1,2*ndim
-c$$$         if (cbc(ifc,iel,1) .eq. 'W  ' .or. cbc(ifc,iel,1) .eq. 'v  ')
-c$$$     $                                  cbc(ifc,iel,3) = 't  '
-c$$$         if (cbc(ifc,iel,1) .eq. 'W  ' .or. cbc(ifc,iel,1) .eq. 'v  ')
-c$$$     $                                  cbc(ifc,iel,4) = 't  '
-c$$$c         if (cbc(ifc,iel,4) .eq. 't  ') cbc(ifc,iel,4) = 'f  '
-c$$$      enddo
-c$$$      enddo
+      if (ifstrs) call fixmska1 (v1mask,v2mask,v3mask)
+      call fixcorners('shl','W  ')
+      
+      do iel=1,nelt
+      do ifc=1,2*ndim
+         if (cbc(ifc,iel,1) .eq. 'W  ' .or. cbc(ifc,iel,1) .eq. 'v  ')
+     $                                  cbc(ifc,iel,3) = 't  '
+         if (cbc(ifc,iel,1) .eq. 'W  ' .or. cbc(ifc,iel,1) .eq. 'v  ')
+     $                                  cbc(ifc,iel,4) = 't  '
+c         if (cbc(ifc,iel,4) .eq. 't  ') cbc(ifc,iel,4) = 'f  '
+      enddo
+      enddo
 
       return
       end
@@ -883,3 +820,69 @@ c---------------------------------------------------------------------
          
       return
       end      
+c---------------------------------------------------------------------
+      subroutine inletprofiles(ix,iy,iz,e,vel,tke,tau)
+c     
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      integer ix,iy,iz,e
+      real vel,tke,tau
+
+      real wd
+      common /walldist/ wd(lx1,ly1,lz1,lelv)
+
+      common /fitters/  ufit(10),kfit1(10),kfit2(10),taufit(10)
+      real ufit,kfit1,kfit2,taufit
+
+      integer icalld
+      save icalld
+      data icalld /0/
+      
+      if(icalld .eq. 0)then
+         open(10,file='ufit.dat',status='old',action='read')
+         open(11,file='kfit1.dat',status='old',action='read')
+         open(12,file='kfit2.dat',status='old',action='read')
+         open(13,file='taufit.dat',status='old',action='read')
+
+         do i=1,10
+            read(10,*)ufit(i)
+            read(11,*)kfit1(i)
+            read(12,*)kfit2(i)
+            read(13,*)taufit(i)
+         enddo
+
+         close(10)
+         close(11)
+         close(12)
+         close(13)
+         icalld = 1
+      endif
+
+      walld = wd(ix,iy,iz,e)
+
+      vel = polyval(ufit,walld)
+      vel = min(vel,0.0)
+
+      if(walld.gt.0.02)then
+         tke = polyval(kfit1,walld)
+      else
+         tke = polyval(kfit2,walld)
+      endif
+      tke = max(tke,0.0)
+
+      tau = polyval(taufit,walld)
+      tau = max(tau,0.0)
+
+      return
+      end
+c---------------------------------------------------------------------
+      real function polyval(p,x)
+
+      real p(10),x
+
+      polyval = p(1)*x**9.+p(2)*x**8.+p(3)*x**7.+p(4)*x**6.+
+     $     p(5)*x**5.+p(6)*x**4.+p(7)*x**3.+p(8)*x**2.+p(9)*x+p(10)
+
+      end function
