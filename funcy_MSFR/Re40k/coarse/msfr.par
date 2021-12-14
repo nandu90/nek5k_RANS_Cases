@@ -2,7 +2,7 @@
 [GENERAL]
 #startFrom = msfr.old
 stopAt = numSteps
-numSteps = 100000
+numSteps = 200000
 dt = 10.00e-5
 writeInterval = 10000
 timeStepper = BDF2

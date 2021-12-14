@@ -640,6 +640,7 @@ c
       data icalld /0/
       
       real vectau(3)
+      real lambda
 
       yplus = 30.0
       kappa = 0.41

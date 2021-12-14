@@ -723,7 +723,7 @@ c
 
 !     sqrt(Tke*sqrt(cmu))
       scmuk = utau**2.0+(up*alpha*kappa)**2.0
-     $     +(2.0*utau*up*alpha*kappa*lambda))
+     $     +(2.0*utau*up*alpha*kappa*lambda)
       scmuk = sqrt(abs(scmuk))
       
 !     Eddy Viscosity
