@@ -673,9 +673,10 @@ c
       tolmax = 1.e5
       visc = cpfld(1,1)
       dens = cpfld(1,2)
-      u_k      = sqrt(sCmu*kw)
+      
       kw       = abs(ps(1))
       tauw     = abs(ps(2))
+      u_k      = sqrt(sCmu*kw)
 
       call getangent   (tsn,ix,iy,iz,iside,e)
       call getbitangent(bsn,ix,iy,iz,iside,e)
