@@ -673,16 +673,15 @@ c
       tolmax = 1.e5
       visc = cpfld(1,1)
       dens = cpfld(1,2)
-     
+      u_k      = sqrt(sCmu*kw)
+      kw       = abs(ps(1))
+      tauw     = abs(ps(2))
+
       call getangent   (tsn,ix,iy,iz,iside,e)
       call getbitangent(bsn,ix,iy,iz,iside,e)
 
       ut1      = tsn(1)*ux+tsn(2)*uy
       ut2      = 0.0
-      kw       = abs(ps(1))
-      tauw     = abs(ps(2))
-      u_k      = sqrt(sCmu*kw)
-      
       if(if3d) then
          ut1    = ut1+tsn(3)*uz
          ut2    = bsn(1)*ux+bsn(2)*uy+bsn(3)*uz
@@ -703,7 +702,7 @@ c
       acosf = abs(cosphi) - 1.
       if(abs(acosf).lt.tol) cosphi=sign(1.,cosphi)
 
-      if((dpw.gt.tol .and.dpw.lt.tolmax)) then 
+      if(dpw.gt.tol) then 
          dpt1  = dpt1/dpw
          dpt2  = dpt2/dpw
       else
@@ -758,55 +757,3 @@ c
       return
       end
 c---------------------------------------------------------------------
-      subroutine blenders(f1,f2,yt,yc)
-
-      real f1,f2,yt,yc
-
-      real a1,a2,a3
-      real b0,b1,b2,b3,b4
-      real c0,c1,c2,c3,c4
-
-      kappa = 0.41
-      c = 5.0
-
-      alpha = 5.0
-      beta = 8.0
-
-      a1 = 1.0
-      a2 = 1e-2
-      a3 = -2.9e-3
-
-      b0 = -0.872
-      b1 = 1.465
-      b2 = -7.02e-2
-      b3 = 1.66e-3
-      b4 = -1.495e-5
-
-      c0 = 8.6
-      c1 = 0.1864
-      c2 = -2.006e-3
-      c3 = 1.144e-5
-      c4 = -2.551e-8
-      
-      if(yt.lt.5.0)then
-         f1 = a1*yt + a2*yt**2 + a3*yt**3
-      elseif(yt.ge.5. .and. yt.lt.30.)then
-         f1 = b0 + b1*yt + b2*yt**2 + b3*yt**3 + b4*yt**4
-      elseif(yt.ge.30.0 .and. yt.lt.140.)then
-         f1 = c0 + c1*yt + c2*yt**2 + c3*yt**3 + c4*yt**4
-      else
-         f1 = (1./kappa)*log(yt) + c
-      endif
-
-      if(yc.lt.4.0)then
-         f2 = a2*yc**2 + a3*yc**3
-      elseif(yc.ge.4. .and. yc.lt.15.)then
-         f2 = b0 + b1*yc + b2*yc**2 + b3*yc**3 + b4*yc**4
-      elseif(yc.ge.15. .and. yc.lt.30.)then
-         f2 = c0 + c1*yc + c2*yc**2 + c3*yc**3 + c4*yc**4
-      else
-         f2 = alpha*log(yc) + beta
-      endif
-
-      return
-      end
