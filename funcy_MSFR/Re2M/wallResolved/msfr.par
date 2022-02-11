@@ -1,10 +1,10 @@
 #Nek5000 parameter file
 [GENERAL]
-#startFrom = msfr.old
+startFrom = msfr.old
 stopAt = numSteps
-numSteps = 25000 #00000
-dt = 8.0e-4
-writeInterval = 5000
+numSteps = 100000 #00000
+dt = 1.0e-5
+writeInterval = 10000
 timeStepper = BDF2
 
 [PROBLEMTYPE]
@@ -18,7 +18,7 @@ writeToFieldFile = yes
 
 [VELOCITY]
 density = 1.0
-viscosity = -476189.9
+viscosity = -1e6
 residualTol = 1e-8
 residualPROJ = yes
 
@@ -31,10 +31,10 @@ solver = none
 
 [SCALAR01] 
 density = 1.0
-diffusivity = -476189.9
+diffusivity = -1e6
 residualTol = 1e-8
 
 [SCALAR02] 
 density = 1.0
-diffusivity = -476189.9
+diffusivity = -1e6
 residualTol = 1e-8

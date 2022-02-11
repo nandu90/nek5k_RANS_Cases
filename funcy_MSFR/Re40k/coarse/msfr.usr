@@ -745,9 +745,9 @@ c
       veddy=kappa*visc*yplusc*ukstar/uc
 
       if(veddy.le.tol .or. veddy.ne.veddy) then
-         factro= 0.5
+         factro= 2.0
       else
-         factro= 0.5 + visc/veddy 
+         factro= 2.0 + visc/veddy 
       endif
 
       if(uc.ne.0.) tw1= (u1t1/u1plusc)*(utau2/uc)*utau2

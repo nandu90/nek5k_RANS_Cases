@@ -73,13 +73,33 @@ def main():
     #cases = ['wallResolved','../Re1M/wallResolved']
     cases = ['coarse','coarse_6','../../../../nek5k_RANS_Cases/funcy_MSFR/Re40k/coarse','wallResolved']
     cases = ['coarse','coarse_6','wallResolved']
+    cases = ['coarse_0.5','coarse','wallResolved']
 
     #labels = ['coarse,lx1=4','coarse,lx1=6','coarse,lx1=8','wallResolved,lx1=8']
     #labels = ['fine,lx1=4','fine,lx1=6','fine,lx1=8','wallResolved,lx1=8']
     labels = ['coarse,GWF,lx1=4','coarse,GWF,lx1=6','coarse,SWF,lx1=4','wallResolved,lx1=8']
     labels = ['coarse,GWF,lx1=4','coarse,GWF,lx1=6','wallResolved,lx1=8']
+    labels = ['$\\sigma_w=2.0$','$\\sigma_w=0.5$','wallResolved,lx1=8']
     #labels = ['Re=40k','Re=1M']
 
+    pltname = 'plot1.dat'
+    for i in range(len(cases)):
+        getdata(cases[i],pltname,x,y,vx,vy,p,temp,sc1,sc2)
+
+    labels = labels
+    plotnow(cases[0]+'_U_x-0.5','$y$','$U$',y,vx,labels)
+    plotnow(cases[0]+'_tke_x-0.5','$y$','$k$',y,sc1,labels)
+    plotnow(cases[0]+'_tau_x-0.5','$y$','$\\tau$',y,sc2,labels)
+
+
+    x = []
+    y = []
+    vx = []
+    vy = []
+    p = []
+    temp = []
+    sc1 = []
+    sc2 = []
     pltname = 'plot2.dat'
     for i in range(len(cases)):
         getdata(cases[i],pltname,x,y,vx,vy,p,temp,sc1,sc2)
@@ -89,6 +109,22 @@ def main():
     plotnow(cases[0]+'_tke_y0.5','$x$','$k$',x,sc1,labels)
     plotnow(cases[0]+'_tau_y0.5','$x$','$\\tau$',x,sc2,labels)
 
+    x = []
+    y = []
+    vx = []
+    vy = []
+    p = []
+    temp = []
+    sc1 = []
+    sc2 = []
+    pltname = 'plot3.dat'
+    for i in range(len(cases)):
+        getdata(cases[i],pltname,x,y,vx,vy,p,temp,sc1,sc2)
+
+    labels = labels
+    plotnow(cases[0]+'_U_x0.5','$y$','$U$',y,vx,labels)
+    plotnow(cases[0]+'_tke_x0.5','$y$','$k$',y,sc1,labels)
+    plotnow(cases[0]+'_tau_x0.5','$y$','$\\tau$',y,sc2,labels)
     # yplus = (H-y)*utau/nu
     # uplus = vx/utau
     # tkeplus = sc1/utau**2.
