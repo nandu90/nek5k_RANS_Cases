@@ -1,0 +1,40 @@
+#Nek5000 parameter file
+[GENERAL]
+startFrom = chan.old
+stopAt = numSteps
+numSteps = 100000 #00000
+dt = 1.0e-2
+writeInterval = 10000
+timeStepper = BDF2
+
+[PROBLEMTYPE]
+equation = incompNS
+#axiSymmetry = yes
+stressFormulation = yes
+variableProperties = yes
+
+[MESH]
+writeToFieldFile = yes
+
+[VELOCITY]
+density = 1.0
+viscosity = -149700.0
+residualTol = 1e-8
+residualPROJ = yes
+
+[PRESSURE]
+residualTol = 1e-6
+residualPROJ = yes
+
+[TEMPERATURE]
+solver = none
+
+[SCALAR01] 
+density = 1.0
+diffusivity = -149700.0
+residualTol = 1e-8
+
+[SCALAR02] 
+density = 1.0
+diffusivity = -149700.0
+residualTol = 1e-8
