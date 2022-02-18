@@ -2,9 +2,9 @@
 [GENERAL]
 startFrom = bfs.old
 stopAt = numSteps
-numSteps = 200000
-dt = 8.0e-4
-writeInterval = 10000
+numSteps = 500000
+dt = 2.5e-4
+writeInterval = 20000
 timeStepper = BDF2
 
 [PROBLEMTYPE]

@@ -169,11 +169,11 @@ Transfinite Surface {10} = {17, 12, 11, 16};
 //+
 Transfinite Surface {11} = {16, 11, 6, 15};
 //+
-Transfinite Curve {-14, 22, -27, 6, 12, -24, 25, -8} = 4 Using Progression 1.0;
+Transfinite Curve {-14, 22, -27, 6, 12, -24, 25, -8} = 12 Using Progression 1.5;
 //+
 Transfinite Curve {13, 23, 26, 7} = 30 Using Progression 1.0;
 //+
-Transfinite Curve {2, 28, 5} = 6 Using Bump 1.0;
+Transfinite Curve {2, 28, 5} = 20 Using Bump 0.02;
 //+
 Transfinite Curve {11, -15, -20, -1} = 20 Using Progression 1.2;
 //+
