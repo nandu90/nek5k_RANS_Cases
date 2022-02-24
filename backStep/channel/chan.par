@@ -1,10 +1,10 @@
 #Nek5000 parameter file
 [GENERAL]
-startFrom = chan.old
+#startFrom = chan.old
 stopAt = numSteps
-numSteps = 100000 #00000
+numSteps = 200000 #00000
 dt = 1.0e-2
-writeInterval = 10000
+writeInterval = 20000
 timeStepper = BDF2
 
 [PROBLEMTYPE]
