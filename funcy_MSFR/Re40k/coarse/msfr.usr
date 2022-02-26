@@ -791,7 +791,7 @@ c---------------------------------------------------------------------
       real u1plusc,u2plusc
       real u1t1,u1t2,ukstar
       real veddy,factro
-      
+      real acosf
 
       yplusc = 30.0
       Econ = 9.0
@@ -893,10 +893,13 @@ c---------------------------------------------------------------------
       endif
       
 !     Get the cosine of angle b/w U_tau and U_p
-      cosphi = dpt1*vtau1+dpt2*vtau2
-
+      cosphi = sign(1.,dpt1)
+c      cosphi = dpt1*vtau1+dpt2*vtau2
+!     This gives better results
+      if(uw.gt.tol)cosphi = (ut1*dpt1+ut2*dpt2)/uw
+            
 !     Get utau
-      disc = u_k**2.0 + (up*alp*kappa)**2.0 * (cosphi**2.-1.)
+      disc = u_k**2.0 + ((up*alp*kappa)**2.0) * (cosphi**2.-1.)
       if(disc.lt.tol)then
          disc = 0.
       endif
