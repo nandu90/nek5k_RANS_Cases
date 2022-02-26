@@ -73,13 +73,13 @@ def main():
     #cases = ['wallResolved','../Re1M/wallResolved']
     cases = ['coarse','coarse_6','../../../../nek5k_RANS_Cases/funcy_MSFR/Re40k/coarse','wallResolved']
     cases = ['coarse','coarse_6','wallResolved']
-    cases = ['coarse_0.5','coarse','wallResolved']
+    cases = ['coarse','wallResolved']
 
     #labels = ['coarse,lx1=4','coarse,lx1=6','coarse,lx1=8','wallResolved,lx1=8']
     #labels = ['fine,lx1=4','fine,lx1=6','fine,lx1=8','wallResolved,lx1=8']
     labels = ['coarse,GWF,lx1=4','coarse,GWF,lx1=6','coarse,SWF,lx1=4','wallResolved,lx1=8']
     labels = ['coarse,GWF,lx1=4','coarse,GWF,lx1=6','wallResolved,lx1=8']
-    labels = ['$\\sigma_w=2.0$','$\\sigma_w=0.5$','wallResolved,lx1=8']
+    labels = ['$\\sigma_w=2.0$','wallResolved,lx1=8']
     #labels = ['Re=40k','Re=1M']
 
     pltname = 'plot1.dat'
