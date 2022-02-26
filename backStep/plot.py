@@ -80,21 +80,21 @@ def main():
     
     cases = ['coarse_2.0','coarse_WF','coarse_spline','wallResolved','wallResolved_spline']
     cases = ['wallResolved','coarse_2.0','coarse_WF']
-    cases = ['wallResolved_spline','coarse_spline']
+#    cases = ['wallResolved_spline','coarse_spline']
 
     labels = ['WR_inlet','WF_inlet','SPLINE','WR,lx1=8','WR,lx1=8_spline']
     labels = ['WR','WF_WR-inlet','WF_WF-inlet']
-    labels = ['WR','WF']
+#    labels = ['WR','WF']
     
     lstyles = ['','--','-','-']
     mrks = ['.','','','']
-    lstyles = ['','--','-']
-    mrks = ['.','','']
+#    lstyles = ['','--','-']
+#    mrks = ['.','','']
 
     uref1 = 1.0#7392
     uref = [uref1,uref1,1.0,uref1,1.0]
     uref = [uref1,uref1,uref1]
-    uref = [1.0,1.0]
+#    uref = [1.0,1.0]
 
     for i in range(n):
         uexp,yuexp,kexp,kyexp = getExpData(i)
