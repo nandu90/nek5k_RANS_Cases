@@ -893,10 +893,17 @@ c---------------------------------------------------------------------
       endif
       
 !     Get the cosine of angle b/w U_tau and U_p
-      cosphi = sign(1.,dpt1)
-c      cosphi = dpt1*vtau1+dpt2*vtau2
+      cosphi = dpt1*vtau1+dpt2*vtau2
+      if(.not.if3d)then
+         if(cosphi .gt. 0.)then
+            cosphi = 1.0
+         else
+            cosphi = -1.0
+         endif
+      endif
 !     This gives better results
-      if(uw.gt.tol)cosphi = (ut1*dpt1+ut2*dpt2)/uw
+c     cosphi = sign(1.,dpt1)
+c      if(uw.gt.tol)cosphi = (ut1*dpt1+ut2*dpt2)/uw
             
 !     Get utau
       disc = u_k**2.0 + ((up*alp*kappa)**2.0) * (cosphi**2.-1.)

@@ -131,21 +131,6 @@ c
 
       e = gllel(eg)
 
-      velx =-1.72845874696*(1-(y-2.0525)*(y-2.0525)/0.01380625)
-      vely = 0.0
-      temp = 0.0
-
-      call turb_in(wd(ix,iy,iz,e),tke_tmp,tau_tmp)
-c      if(ifield.eq.3) temp = tke_tmp
-c      if(ifield.eq.4) temp = tau_tmp
-      pa = 0
-
-      yplus=  30.0
-      Econ = 9.0
-      kappa= 0.4
-      sCmu = 0.3
-      visc=cpfld(1,1)
-
       cbv3 = cbc(iside,e,1)
       cbt3 = cbc(iside,e,2)
       cbk3 = cbc(iside,e,3)
@@ -162,70 +147,12 @@ c      if(ifield.eq.4) temp = tau_tmp
       endif
 
       if(cbv3.eq.'shl') then
-         call getangent   (tsn,ix,iy,iz,iside,e)
-         call getbitangent(bsn,ix,iy,iz,iside,e)
-
-         ut1=tsn(1)*ux+tsn(2)*uy
-         ut2=0.0
-         if(if3d) then
-            ut1=ut1+tsn(3)*uz
-            ut2=bsn(1)*ux+bsn(2)*uy+bsn(3)*uz
-         endif
-         uw=sqrt(ut1*ut1+ut2*ut2)
-         kw=abs(ps(1))
-         tauw=abs(ps(2))
-         uplus=log(Econ*yplus)/kappa
-         utau1=uw/uplus
-         u_k = sqrt(sCmu*kw)
-         utau=max(utau1,u_k)
-         veddy=kappa*visc*yplus
-         factr=1.0+visc/veddy
-         factro= 0.5 + visc/veddy ! 1. + visc/(0.5*veddy) sigma_w=2
-         
-         if(uw.lt.upmin) upmin=uw
-         
-c     tw1=(utau*ut1)/uplus*factr
-c     tw2=(utau*ut2)/uplus*factr
-         sgnut1 = sign(1.,ut1)
-         sgnut2 = sign(1.,ut2)
-         tw1=(utau*utau1*sgnut1)*factr ! this is the G-M approach
-         tw2=0.                 !(utau*utau1*sgnut2)*factr
-         
-         tkewall=utau*utau/sCmu
-                  
-c     tkewall=u_k*u_k/sCmu
-         omgwall=tkewall/veddy
-c     omgwall=kw/veddy
-c     omgwall=u_k*u_k/sCmu/veddy
-         
-         tol = 1.e-6
-         if(tkewall.gt.tol) then
-           tauwall=1./omgwall  !veddy/tkewall
-            tauwall= min(0.1,tauwall)
-         else
-            tauwall= 0.
-         endif
-         
          sgnydn = sign(1.,ydn)
          flux_kwall= 0.0
-c         flux_tauwall=0.5*(sCmu*kappa*veddy/u_k)*sgnydn*factro ! this should be veddy*dtau/dy
-         flux_tauwall=kappa*utau*tauw*sgnydn*factro ! this should be veddy*dtau/dy
-c         write(*,*) 'WTF is flux_tauwall ', u_k,tauw,sgnydn,factro
-
-c       set traction BC for velocity
-        un  = 0.0
-        tr1 =-twnew
-        tr2 =-tw2
-        
-c       set Dirichlet BCs for tke and tau
-        if(ifield.eq.3) then
-          temp = tkewall
-          flux = 0.0
-        endif
-        if(ifield.eq.4) temp = tauwall
-
-        call unifiedWallFunc(ix,iy,iz,iside,e,tw1,tkewall,flux_tauwall)
-        flux_tauwall = flux_tauwall*sgnydn
+c         call unifiedWallFunc(ix,iy,iz,iside,e,tw1,tkewall,flux_tauwall)
+c     call wallfunc3D(ix,iy,iz,iside,e,tw1,tw2,tkewall,flux_tauwall)
+         call wallfunc3D(ix,iy,iz,iside,e,tw1,tw2,tkewall,flux_tauwall)
+         flux_tauwall = flux_tauwall*sgnydn
       endif
 
       if     (ifield.eq.1) then
@@ -385,9 +312,9 @@ C      implicit none
          call lineplot(pta,ptb,1001)
       endif
 Cc turbulent outflow bc
-      rq  = 4.
-      uin = 0.
-      call turb_outflow(d,m1,rq,uin)
+c      rq  = 4.
+c      uin = 0.
+c      call turb_outflow(d,m1,rq,uin)
 
       
       
@@ -710,7 +637,7 @@ c---------------------------------------------------------------------
       subroutine unifiedWallFunc(ix,iy,iz,iside,e,tw1,tke,flux_tau)
 c
 c      implicit none
-c      
+c     
       include 'SIZE'
       include 'TOTAL'
       include 'NEKUSE'
@@ -718,167 +645,314 @@ c
       integer ix,iy,iz,e,iside
 
       real tsn(3),bsn(3)
-      real yplus,kappa,cmu,c
-      real alpha,beta
-      real psk,pstau
+      real yplusc,Econ,sCmu,Ccon,kappa,kw,tauw
+      real alp,bet,tol,tolmax
+      real Ccon1, Ccon2
+
+      real dpt1,dpt2,dpt,dpw,sgndpt1,up
+      real udp,cosphi,acosf
+      real ut1,ut2,uw,sgnut1
+      real u_k,utau2,uc
+
+      real u1plusc,u2plusc
+      
+      real up_plus,u1t1,u1t2,utau_plus,tw1,ukstar
+      real veddy,factro,flux_tau,tke
 
       common /pgrads/ dpdx(lx1,ly1,lz1,lelt),dpdy(lx1,ly1,lz1,lelt),
      $     dpdz(lx1,ly1,lz1,lelt)
       real dpdx,dpdy,dpdz
+      real visc,dens
 
-      real dpt1,dpt2
+      yplusc = 30.0
+      Econ = 9.0
+      kappa = 0.4
+      sCmu = 0.3
+      Ccon = log(Econ)/kappa
+      alp = 5.0
+      bet = 8.0
+      tol = 1.e-6
+      tolmax = 1.e5
+      visc = cpfld(1,1)
+      dens = cpfld(1,2)
       
-      yplus = 30.0
-      kappa = 0.41
-      cmu = 0.09
-      c = 5.0
+      kw       = abs(ps(1))
+      tauw     = abs(ps(2))
+      u_k      = sqrt(sCmu*kw)
 
-      alpha = 5.0
-      beta = 8.0
+      call getangent   (tsn,ix,iy,iz,iside,e)
+      call getbitangent(bsn,ix,iy,iz,iside,e)
 
-!     k and tau from previous step
-      psk = abs(ps(1))
-      pstau = abs(ps(2))
+      ut1      = tsn(1)*ux+tsn(2)*uy
+      ut2      = 0.0
+      if(if3d) then
+         ut1    = ut1+tsn(3)*uz
+         ut2    = bsn(1)*ux+bsn(2)*uy+bsn(3)*uz
+      endif
+      uw       = sqrt( ut1* ut1+ ut2* ut2)
       
-!     Pressure gradient
+      dpt1     = tsn(1)*dpdx(ix,iy,iz,e)+tsn(2)*dpdy(ix,iy,iz,e)
+      dpt2     = 0.0
+      if(if3d) then
+         dpt1   = dpt1+tsn(3)*dpdz(ix,iy,iz,e)
+         dpt2   = bsn(1)*dpdx(ix,iy,iz,e)+bsn(2)*dpdy(ix,iy,iz,e)
+     $        +bsn(3)*dpdz(ix,iy,iz,e)
+      endif
+      dpw      = sqrt(dpt1*dpt1+dpt2*dpt2)
+      udp      = ut1*dpt1+ut2*dpt2
+      cosphi   = 1.
+      if((uw*dpw).gt.tol) cosphi = udp/uw/dpw
+      acosf = abs(cosphi) - 1.
+      if(abs(acosf).lt.tol) cosphi=sign(1.,cosphi)
+
+      if(dpw.gt.tol) then 
+         dpt1  = dpt1/dpw
+         dpt2  = dpt2/dpw
+      else
+         dpt1  = 0.
+         dpt2  = 0.
+         dpw   = 0.
+      endif
+      
+      up       = (visc*dpw/dens)**(1./3.)
+      
+      if    (cosphi.eq. 1.) then
+         utau2 = abs(u_k    -alp*kappa*up)
+      elseif(cosphi.eq.-1.) then
+         utau2 =     u_k    +alp*kappa*up
+      else
+         write(*,*) 'This is only for 2D and cos(phi)=+-1'
+         write(*,*) 'WTF is cosphi ', uw, dpw, udp, cosphi
+      endif
+      
+      uc = utau2 + up
+      Ccon1   = 0.
+      u1plusc = 0.
+      if(utau2.ne.0. .and. uc.ne.0.) then
+         Ccon1   = (utau2/uc)*(log(utau2/uc)/kappa+ Ccon)
+         u1plusc = (utau2/uc)* log(  yplusc)/kappa+ Ccon1
+      endif
+      Ccon2   = 0.
+      u2plusc = 0.
+      if(up   .ne.0. .and. uc.ne.0.) then
+         Ccon2   = (up   /uc)*(log(up   /uc)*alp  + bet )
+         u2plusc = (up   /uc)* log(  yplusc)*alp  + Ccon2
+      endif
+        
+      u1t1    = ut1 - uc*dpt1 * u2plusc
+      u1t2    = ut2 - uc*dpt2 * u2plusc
+
+      ukstar= abs(sign(1.,ut1)*utau2  +dpt1*alp*kappa*up)
+        
+      veddy=kappa*visc*yplusc*ukstar/uc
+
+      if(veddy.le.tol .or. veddy.ne.veddy) then
+         factro= 2.0
+      else
+         factro= 2.0 + visc/veddy 
+      endif
+
+      if(uc.ne.0.) tw1= (u1t1/u1plusc)*(utau2/uc)*utau2
+     $     + up**2*dpt1*(up/uc)*yplusc
+      
+      flux_tau=kappa*ukstar*tauw*factro ! this should be veddy*dtau/dy
+
+      return
+      end
+c---------------------------------------------------------------------
+      subroutine wallfunc3D(ix,iy,iz,iside,e,tw1,tw2,tke,flux_tau)
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      integer ix,iy,iz,e,iside
+      real tw1,tw2,tke,flux_tau
+
+      real tsn(3),bsn(3),usn(3)
+      real yplusc,Econ,sCmu,Ccon,kappa
+      real alp,bet,tol,tolmax
+      real visc,dens
+      real kw,tauw,u_k
+
+      common /pgrads/ dpdx(lx1,ly1,lz1,lelt),dpdy(lx1,ly1,lz1,lelt),
+     $     dpdz(lx1,ly1,lz1,lelt)
+      real dpdx,dpdy,dpdz
+      real dpx,dpy,dpz,dpn
+      real dptx,dpty,dptz
+
+      real dpt1,dpt2,dpw,up
+      real unormal,utx,uty,utz,uw,ut1,ut2
+      real vtau(3),vtau1,vtau2,vtauw
+      real cosphi,disc
+      real utau,uc
+
+      real Ccon1, Ccon2
+      real u1plusc,u2plusc
+      real u1t1,u1t2,ukstar
+      real veddy,factro
+      real acosf
+
+      yplusc = 30.0
+      Econ = 9.0
+      kappa = 0.4
+      sCmu = 0.3
+      Ccon = log(Econ)/kappa
+      alp = 5.0
+      bet = 8.0
+      tol = 1.e-6
+      tolmax = 1.e5
+      visc = cpfld(1,1)
+      dens = cpfld(1,2)
+
+      kw       = abs(ps(1))
+      tauw     = abs(ps(2))
+      u_k      = sqrt(sCmu*kw)
+
+!     Get the tangent and bi-tangent vectors
+      call getangent   (tsn,ix,iy,iz,iside,e)
+      call getbitangent(bsn,ix,iy,iz,iside,e)
+
+!     Get the surface normal
+      call getSnormal (usn,ix,iy,iz,iside,e)
+
+!     Get the tangent of pressure gradient 
       dpx = dpdx(ix,iy,iz,e)
       dpy = dpdy(ix,iy,iz,e)
       dpz = dpdz(ix,iy,iz,e)
-      
-      call getangent   (tsn,ix,iy,iz,iside,e)
-      call getbitangent(bsn,ix,iy,iz,iside,e)
-            
-      dpt1 = tsn(1)*dpx+tsn(2)*dpy
-      dpt2 = 0.0
-      
-      if(if3d)then
-         dpt1 = dpt1+tsn(2)*dpz
-         dpt2 = bsn(1)*dpx+bsn(2)*dpy+bsn(2)*dpz
+      if(if3d)then !Pressure normal
+         dpn = dpx*usn(1)+dpy*usn(2)+dpz*usn(3)
+      else
+         dpn = dpx*usn(1)+dpy*usn(2)
       endif
-      dpt = sqrt(dpt1*dpt1+dpt2*dpt2)
-      up = ((cpfld(1,1)/cpfld(1,2)**2.0)*dpt)**(1./3.)
-      sgndpt1 = sign(1.,dpt1)
-      
-!     utau
-      u_k = abs((psk*sqrt(cmu))**0.5 - sgndpt1*up*alpha*kappa)
-      utau = max(1e-8,u_k)
+      dptx = dpx-dpn*usn(1)
+      dpty = dpy-dpn*usn(2)
+      dptz = dpz-dpn*usn(3)
 
+!     Get the dot product of press tangent with
+!     tangent and bi-tangent vectors
+      dpt1 = tsn(1)*dptx+tsn(2)*dpty
+      dpt2 = 0.0      
+      if(if3d)then
+         dpt1 = dpt1+tsn(3)*dptz
+         dpt2 = bsn(1)*dptx+bsn(2)*dpty+bsn(3)*dptz
+      endif
+      dpw = sqrt(dpt1*dpt1+dpt2*dpt2)
+      if(dpw.gt.tol)then
+         dpt1 = dpt1/dpw
+         dpt2 = dpt2/dpw
+      else
+         dpt1 = 0.
+         dpt2 = 0.
+         dpw = 0.
+      endif
+
+!     Get the pressure velocity scale
+      up = (visc*dpw/dens)**(1./3.)
+      
+!     Get the tangential velocity
+!     Velocity from previous time step should be tangential
+!     Just in case it is not:
+      if(if3d)then
+         unormal = ux*usn(1)+uy*usn(2)+uz*usn(3)
+      else
+         unormal = ux*usn(1)+uy*usn(2)
+      endif
+      utx = ux-unormal*usn(1)
+      uty = uy-unormal*usn(2)
+      utz = uz-unormal*usn(3)
+
+      ut1=tsn(1)*utx+tsn(2)*uty
+      ut2=0.0
+      if(if3d) then
+         ut1=ut1+tsn(3)*utz
+         ut2=bsn(1)*utx+bsn(2)*uty+bsn(3)*utz
+      endif
+      uw=sqrt(ut1*ut1+ut2*ut2)
+
+!     Get U_tau = U-U_p 
+!     and its components along tangent and bi-tangent vectors
+      vtau(1) = utx-dptx
+      vtau(2) = uty-dpty
+      vtau(3) = utz-dptz
+      
+      vtau1 = tsn(1)*vtau(1)+tsn(2)*vtau(2)
+      vtau2 = 0.0
+      if(if3d)then
+         vtau1 = vtau1 + tsn(3)*vtau(3)
+      else
+         vtau2 = bsn(1)*vtau(1)+bsn(2)*vtau(2)+bsn(3)*vtau(3)
+      endif
+      vtauw = sqrt(vtau1*vtau1+vtau2*vtau2)
+      if(vtauw.gt.tol)then
+         vtau1 = vtau1/vtauw
+         vtau2 = vtau2/vtauw
+      else
+         vtau1 = 0.
+         vtau2 = 0.
+      endif
+      
+!     Get the cosine of angle b/w U_tau and U_p
+      cosphi = dpt1*vtau1+dpt2*vtau2
+      if(.not.if3d)then
+         if(cosphi .gt. 0.)then
+            cosphi = 1.0
+         else
+            cosphi = -1.0
+         endif
+      endif
+!     This gives better results
+c     cosphi = sign(1.,dpt1)
+c      if(uw.gt.tol)cosphi = (ut1*dpt1+ut2*dpt2)/uw
+            
+!     Get utau
+      disc = u_k**2.0 + ((up*alp*kappa)**2.0) * (cosphi**2.-1.)
+      if(disc.lt.tol)then
+         disc = 0.
+      endif
+      utau = abs(-up*alp*kappa*cosphi + sqrt(disc))
 
 !     Combined velocity scale
       uc = utau+up
 
-!     Normalized Pressure gradient velocity     
-      if(up/utau .lt. 1e-8)then
-         up_plus = 0.
-      else
-         c2 = (up/uc)*(alpha*log(up/uc)+beta)
-         up_plus = sgndpt1*(alpha*(up/uc)*log(yplus)+c2)
+      Ccon1   = 0.
+      u1plusc = 0.
+      if(utau.ne.0. .and. uc.ne.0.) then
+         Ccon1   = (utau/uc)*(log(utau/uc)/kappa+ Ccon)
+         u1plusc = (utau/uc)* log(  yplusc)/kappa+ Ccon1
       endif
-     
-!     Tangential velocity
-      ut1=tsn(1)*ux+tsn(2)*uy
-      ut2=0.0
-      if(if3d) then
-         ut1=ut1+tsn(3)*uz
-         ut2=bsn(1)*ux+bsn(2)*uy+bsn(3)*uz
+      Ccon2   = 0.
+      u2plusc = 0.
+      if(up   .ne.0. .and. uc.ne.0.) then
+         Ccon2   = (up   /uc)*(log(up   /uc)*alp  + bet )
+         u2plusc = (up   /uc)* log(  yplusc)*alp  + Ccon2
       endif
-      uw=sqrt(ut1*ut1+ut2*ut2)
-      sgnut1 = sign(1.,ut1)
 
-!     Normalized tangential velocity
-      uplus = sgnut1*uw/uc
-
-!     Normalized friction velocity
-      utau_plus = uplus-up_plus
-
-!     Wall shear
-      c1 = (utau/uc)*((1./kappa)*log(utau/uc) + c)
-      tauw = utau_plus*cpfld(1,2)*utau**2.
-      tauw = tauw/((1./kappa)*(utau/uc)*log(yplus)+c1)
-
-!     Friction velocity from wall shear
-c      utau = sqrt(abs(tauw)/cpfld(1,2))
+      u1t1 = ut1 - uc*dpt1*u2plusc
+      u1t2 = ut2 - uc*dpt2*u2plusc
       
-!     G-M approach
-c      utau = max(u_k,utau)   !Does not give good results
-
-!     Momentum BC - Shih 1999, Eq. 37
-      tw1 = tauw/cpfld(1,2) + sgndpt1*(up**3./uc)*yplus
-            
-!     Eddy Viscosity
-      eddy = (yplus*cpfld(1,1)/uc)
-      eddy = eddy*abs(sgnut1*utau*kappa + sgndpt1*up*alpha*kappa**2.0)
-     
-!     Omega*y
-      omegay = sqrt(1./cmu)*abs(sgnut1*(utau/kappa) + sgndpt1*up*alpha)
-
-!     TKE
-      tke = sqrt(cmu)*(omegay*kappa)**2.0
-     
-!     Flux for tau
-      dtaudyk = abs(sgnut1*utau*kappa + sgndpt1*up*alpha*kappa**2.0)
-      sigma_w = 0.5
-      if(eddy.lt.1e-8)then
-         factr =  1./sigma_w    !+ cpfld(1,1)/eddy
-      else
-         factr = 1./sigma_w + cpfld(1,1)/eddy
+      tw1 = 0.
+      tw2 = 0.
+      if(uc.ne.0. .and. u1plusc .ne.0.)then
+         tw1 = (u1t1/u1plusc)*(utau/uc)*utau*dens
+     $        + up**2.*dpt1*(up/uc)*yplusc
+         if(if3d)tw2 = (u1t2/u1plusc)*(utau/uc)*utau*dens
+     $        + up**2.*dpt2*(up/uc)*yplusc
       endif
       
-      flux_tau = factr*dtaudyk*pstau
+      ukstar = utau**2. + (up*alp*kappa)**2.
+     $     + 2.*utau*up*alp*kappa*cosphi
+      ukstar = sqrt(max(0.,ukstar))
+      
+      veddy = kappa*visc*yplusc*ukstar/uc
+      if(veddy.le.tol .or. veddy.ne.veddy) then
+         factro= 0.5
+      else
+         factro= 0.5 + visc/veddy 
+      endif
 
-c      write(*,*)utau,up,up_plus,tke,tw1,flux_tau
+      flux_tau = kappa*ukstar*tauw*factro
+           
       return
       end
-c---------------------------------------------------------------------
-      subroutine blenders(f1,f2,yt,yc)
-
-      real f1,f2,yt,yc
-
-      real a1,a2,a3
-      real b0,b1,b2,b3,b4
-      real c0,c1,c2,c3,c4
-
-      kappa = 0.41
-      c = 5.0
-
-      alpha = 5.0
-      beta = 8.0
-
-      a1 = 1.0
-      a2 = 1e-2
-      a3 = -2.9e-3
-
-      b0 = -0.872
-      b1 = 1.465
-      b2 = -7.02e-2
-      b3 = 1.66e-3
-      b4 = -1.495e-5
-
-      c0 = 8.6
-      c1 = 0.1864
-      c2 = -2.006e-3
-      c3 = 1.144e-5
-      c4 = -2.551e-8
-      
-      if(yt.lt.5.0)then
-         f1 = a1*yt + a2*yt**2 + a3*yt**3
-      elseif(yt.ge.5. .and. yt.lt.30.)then
-         f1 = b0 + b1*yt + b2*yt**2 + b3*yt**3 + b4*yt**4
-      elseif(yt.ge.30.0 .and. yt.lt.140.)then
-         f1 = c0 + c1*yt + c2*yt**2 + c3*yt**3 + c4*yt**4
-      else
-         f1 = (1./kappa)*log(yt) + c
-      endif
-
-      if(yc.lt.4.0)then
-         f2 = a2*yc**2 + a3*yc**3
-      elseif(yc.ge.4. .and. yc.lt.15.)then
-         f2 = b0 + b1*yc + b2*yc**2 + b3*yc**3 + b4*yc**4
-      elseif(yc.ge.15. .and. yc.lt.30.)then
-         f2 = c0 + c1*yc + c2*yc**2 + c3*yc**3 + c4*yc**4
-      else
-         f2 = alpha*log(yc) + beta
-      endif
-
-      return
-      end
+c---------------------------------------------------------------------      
