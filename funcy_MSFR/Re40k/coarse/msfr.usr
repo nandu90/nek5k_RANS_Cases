@@ -907,10 +907,14 @@ c      if(uw.gt.tol)cosphi = (ut1*dpt1+ut2*dpt2)/uw
             
 !     Get utau
       disc = u_k**2.0 + ((up*alp*kappa)**2.0) * (cosphi**2.-1.)
-      if(disc.lt.tol)then
+      if(disc.lt.0.)then
          disc = 0.
+         utau = 0.
+      else
+         utau = -up*alp*kappa*cosphi + sqrt(disc)   
+         if(utau .lt. 0.)utau = 0.
       endif
-      utau = abs(-up*alp*kappa*cosphi + sqrt(disc))
+      
 
 !     Combined velocity scale
       uc = utau+up
