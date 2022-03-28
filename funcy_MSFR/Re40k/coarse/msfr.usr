@@ -892,6 +892,14 @@ c---------------------------------------------------------------------
       else
          cosphi = sign(1.,dpt1*ut1+dpt2*ut2)
       endif
+
+      if(.not.if3d)then
+         if(cosphi .gt. 0.0)then
+            cosphi = 1.0
+         else
+            cosphi = -1.0
+         endif
+      endif
       
       utau = utold(ix,iy,iz,e)
       call newton_utau(utau,cospsi,up,cosphi,uw,kw,if3d,nid)
