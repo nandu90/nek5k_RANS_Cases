@@ -1026,22 +1026,24 @@ c---------------------------------------------------------------------
       utau2D = -up*alp*kappa + sqrt(k*sCmu)
       
       do i=1,maxiter
-         if(i.gt.maxiter)then
-            write(*,*)"Newton solver did not converge!"
-            call exit(1)
-         endif
-
          f0 = futau(ut0,up,cosphi,u,k,if3d)
          f1 = futau(ut1,up,cosphi,u,k,if3d)
 
          utau = ut0 - (ut1-ut0)*f0/(f1-f0)
+         if(abs(utau-ut0).lt.tol)exit
+         
          ut0 = ut1
          ut1 = utau
-
+         
          f2 = futau(utau,up,cosphi,u,k,if3d)
          if(abs(f2).lt.tol)then
             exit
          endif
+         
+         if(i.ge.maxiter)then
+            write(*,*)"Newton solver did not converge!",utau,f2
+c            call exit(1)
+         endif         
       enddo
       
       uc = utau+up
