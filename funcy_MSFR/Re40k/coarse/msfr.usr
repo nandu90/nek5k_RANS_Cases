@@ -953,7 +953,7 @@ c---------------------------------------------------------------------
       return
       end
 c---------------------------------------------------------------------
-      real function futau(utau,up,cosphi,u,k,if3d)
+      real function futau(utau,up,cospsi,cosphi,u,k,if3d)
       implicit none
 
       real utau,up,cosphi,u,k
@@ -1017,59 +1017,38 @@ c---------------------------------------------------------------------
 
       real ut0,ut1,futau
 
-      tol = 1e-10
+      tol = 1e-8
       maxiter = 20
 
-      ut0 = utau + 1.0
-      ut1 = utau
-      
-      utau2D = -up*alp*kappa + sqrt(k*sCmu)
-      
-      do i=1,maxiter
-         f0 = futau(ut0,up,cosphi,u,k,if3d)
-         f1 = futau(ut1,up,cosphi,u,k,if3d)
-
-         utau = ut0 - (ut1-ut0)*f0/(f1-f0)
-         if(abs(utau-ut0).lt.tol)exit
-         
-         ut0 = ut1
+      if(up.eq.0.)then
+         utau = sqrt(k*sCmu)
+         cospsi = 0.
+         return
+      else
+         ut0 = utau + 1.0
          ut1 = utau
-         
-         f2 = futau(utau,up,cosphi,u,k,if3d)
-         if(abs(f2).lt.tol)then
-            exit
-         endif
-         
-         if(i.ge.maxiter)then
-            write(*,*)"Newton solver did not converge!",utau,f2
-c            call exit(1)
-         endif         
-      enddo
-      
-      uc = utau+up
-      
-      utauplus = 0.
-      if(utau.ne.0. .and. uc.ne.0.)then
-         utauplus = (1./kappa)*(log(yplusc)+log(utau/uc)) + Ccon
-      endif
-         
-      upplus = 0.
-      if(up.ne.0. .and. uc.ne.0.)then
-         upplus = alp*(log(yplusc) + log(up/uc)) + bet
+              
+         do i=1,maxiter
+            f0 = futau(ut0,up,cospsi,cosphi,u,k,if3d)
+            f1 = futau(ut1,up,cospsi,cosphi,u,k,if3d)
+            
+            utau = ut0 - (ut1-ut0)*f0/(f1-f0)
+            if(abs(utau-ut0).lt.tol)exit
+            
+            ut0 = ut1
+            ut1 = utau
+            
+            f2 = futau(utau,up,cospsi,cosphi,u,k,if3d)
+            if(abs(f2).lt.tol)then
+               exit
+            endif
+            
+            if(i.ge.maxiter)then
+               write(*,*)"Newton solver did not converge!",utau,f2
+c     call exit(1)
+            endif         
+         enddo
       endif
 
-      cospsi = 1.0
-      if(utau.ne.0. .and. uc.ne.0.)then
-         cospsi = (u*cosphi - up*upplus)/(utauplus*utau)
-      endif
-      
-      if(.not.if3d)then
-         if(cospsi.gt.0.)then
-            cospsi = 1.
-         else
-            cospsi = -1.
-         endif
-      endif
-     
       return
       end
