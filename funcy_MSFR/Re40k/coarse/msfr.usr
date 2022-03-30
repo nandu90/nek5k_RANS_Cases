@@ -964,9 +964,10 @@ c---------------------------------------------------------------------
       common /forutau/ kappa,alp,bet,Ccon,yplusc,sCmu
 
       real utauplus, upplus
-      real uc,cospsi
+      real uc,cospsi,llim
 
-      utau = max(1e-8,utau)
+      llim = max(1e-8,-up*alp*kappa+sqrt(k*sCmu))
+      utau = max(llim,utau)
       uc = utau+up
       
       utauplus = 0.
@@ -1037,13 +1038,6 @@ c---------------------------------------------------------------------
                exit
             else
                utau = ut0 - (ut1-ut0)*f0/(f1-f0)
-               if(utau.ne.utau)then
-                  write(*,*)utau,ut0,ut1,f0,f1
-                  call exit(1)
-               endif
-               
-c     if(abs(utau-ut0).lt.tol)exit
-               
                ut0 = ut1
                ut1 = utau
                
@@ -1055,7 +1049,6 @@ c     if(abs(utau-ut0).lt.tol)exit
                
                if(i.ge.maxiter)then
                   write(*,*)"Newton solver did not converge!",utau,f2
-c     call exit(1)
                endif
             endif
          enddo
