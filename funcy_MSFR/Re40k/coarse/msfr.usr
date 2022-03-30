@@ -966,7 +966,7 @@ c---------------------------------------------------------------------
       real utauplus, upplus
       real uc,cospsi
 
-      utau = max(1e-12,utau)
+      utau = max(1e-8,utau)
       uc = utau+up
       
       utauplus = 0.
@@ -1025,28 +1025,39 @@ c---------------------------------------------------------------------
          cospsi = 0.
          return
       else
-         ut0 = utau + 1.0
-         ut1 = utau
+         ut1 = utau !max(1e-8,-up*alp*kappa + sqrt(k*sCmu))
+         ut0 = ut1 + 1. !up*alp*kappa + sqrt(k*sCmu)
               
          do i=1,maxiter
             f0 = futau(ut0,up,cospsi,cosphi,u,k,if3d)
             f1 = futau(ut1,up,cospsi,cosphi,u,k,if3d)
-            
-            utau = ut0 - (ut1-ut0)*f0/(f1-f0)
-            if(abs(utau-ut0).lt.tol)exit
-            
-            ut0 = ut1
-            ut1 = utau
-            
-            f2 = futau(utau,up,cospsi,cosphi,u,k,if3d)
-            if(abs(f2).lt.tol)then
+
+            if(abs(f1-f0).lt.tol)then
+               utau = ut0
                exit
-            endif
-            
-            if(i.ge.maxiter)then
-               write(*,*)"Newton solver did not converge!",utau,f2
+            else
+               utau = ut0 - (ut1-ut0)*f0/(f1-f0)
+               if(utau.ne.utau)then
+                  write(*,*)utau,ut0,ut1,f0,f1
+                  call exit(1)
+               endif
+               
+c     if(abs(utau-ut0).lt.tol)exit
+               
+               ut0 = ut1
+               ut1 = utau
+               
+               f2 = futau(utau,up,cospsi,cosphi,u,k,if3d)
+               
+               if(abs(f2).lt.tol)then
+                  exit
+               endif
+               
+               if(i.ge.maxiter)then
+                  write(*,*)"Newton solver did not converge!",utau,f2
 c     call exit(1)
-            endif         
+               endif
+            endif
          enddo
       endif
 
