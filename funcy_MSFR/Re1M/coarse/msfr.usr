@@ -116,7 +116,7 @@ c
 
       integer ix,iy,iz,iside,e,eg
       real velx,vely,blunt_vel,tol
-      real usn(3),tsn(3),bsn(3),ut1,ut2,uw,utau,kw, u_k,tauw
+      real usn(3),tsn(3),bsn(3),ut1,ut2,uw,utaukw, u_k,tauw
       real tw1,tw2,tkewall,omgwall,tauwall,sgnut1,sgnut2,utau1
       real yplus,uplus,Econ,kappa,veddy,visc,factr,factro,sCmu
       real tke_tmp,tau_tmp,upmin,sgnydn
@@ -310,11 +310,19 @@ C      implicit none
          ptb(2) = 2.17
          ptb(3) = 0.
          call lineplot(pta,ptb,1001)
+
+         pta(1) = 0.0
+         pta(2) = 0.0
+         pta(3) = 0.
+         ptb(1) = 0.0
+         ptb(2) = 1.054
+         ptb(3) = 0.
+         call lineplot(pta,ptb,1001)
       endif
 Cc turbulent outflow bc
-c      rq  = 4.
-c      uin = 0.
-c      call turb_outflow(d,m1,rq,uin)
+      rq  = 4.
+      uin = 0.
+      call turb_outflow(d,m1,rq,uin)
 
       
       
@@ -784,7 +792,7 @@ c---------------------------------------------------------------------
       real dpt1,dpt2,dpw,up
       real unormal,utx,uty,utz,uw,ut1,ut2
       real vtau(3),vtau1,vtau2,vtauw
-      real cosphi,disc
+      real cosphi,disc,cospsi
       real utau,uc
 
       real Ccon1, Ccon2
@@ -793,6 +801,22 @@ c---------------------------------------------------------------------
       real veddy,factro
       real acosf
 
+      real utold(lx1,ly1,lz1,lelv)
+      common /oldu/ utold
+      
+      common /forutau/ kappa,alp,bet,Ccon,yplusc,sCmu
+
+      integer icalld
+      save icalld
+      data icalld /0/
+
+      real utau2D
+
+      if(icalld.eq.0)then
+         call rzero(utold,lx1*ly1*lz1*nelt)
+         icalld = 1
+      endif
+      
       yplusc = 30.0
       Econ = 9.0
       kappa = 0.4
@@ -870,52 +894,25 @@ c---------------------------------------------------------------------
       endif
       uw=sqrt(ut1*ut1+ut2*ut2)
 
-!     Get U_tau = U-U_p 
-!     and its components along tangent and bi-tangent vectors
-      vtau(1) = utx-dptx
-      vtau(2) = uty-dpty
-      vtau(3) = utz-dptz
-      
-      vtau1 = tsn(1)*vtau(1)+tsn(2)*vtau(2)
-      vtau2 = 0.0
-      if(if3d)then
-         vtau1 = vtau1 + tsn(3)*vtau(3)
+!     Get utau
+      if(uw.ne.0.)then
+         cosphi = (dpt1*ut1+dpt2*ut2)/uw
       else
-         vtau2 = bsn(1)*vtau(1)+bsn(2)*vtau(2)+bsn(3)*vtau(3)
+         cosphi = sign(1.,dpt1*ut1+dpt2*ut2)
       endif
-      vtauw = sqrt(vtau1*vtau1+vtau2*vtau2)
-      if(vtauw.gt.tol)then
-         vtau1 = vtau1/vtauw
-         vtau2 = vtau2/vtauw
-      else
-         vtau1 = 0.
-         vtau2 = 0.
-      endif
-      
-!     Get the cosine of angle b/w U_tau and U_p
-      cosphi = dpt1*vtau1+dpt2*vtau2
+
       if(.not.if3d)then
-         if(cosphi .gt. 0.)then
+         if(cosphi .gt. 0.0)then
             cosphi = 1.0
          else
             cosphi = -1.0
          endif
       endif
-!     This gives better results
-c     cosphi = sign(1.,dpt1)
-c      if(uw.gt.tol)cosphi = (ut1*dpt1+ut2*dpt2)/uw
-            
-!     Get utau
-      disc = u_k**2.0 + ((up*alp*kappa)**2.0) * (cosphi**2.-1.)
-      if(disc.lt.0.)then
-         disc = 0.
-         utau = 0.
-      else
-         utau = -up*alp*kappa*cosphi + sqrt(disc)   
-         if(utau .lt. 0.)utau = 0.
-      endif
       
-
+      utau = utold(ix,iy,iz,e)
+      call newton_utau(utau,cospsi,up,cosphi,uw,kw,if3d,nid)
+      utold(ix,iy,iz,e) = utau
+      
 !     Combined velocity scale
       uc = utau+up
 
@@ -945,7 +942,7 @@ c      if(uw.gt.tol)cosphi = (ut1*dpt1+ut2*dpt2)/uw
       endif
       
       ukstar = utau**2. + (up*alp*kappa)**2.
-     $     + 2.*utau*up*alp*kappa*cosphi
+     $     + 2.*utau*up*alp*kappa*cospsi
       ukstar = sqrt(max(0.,ukstar))
       
       veddy = kappa*visc*yplusc*ukstar/uc
@@ -956,7 +953,114 @@ c      if(uw.gt.tol)cosphi = (ut1*dpt1+ut2*dpt2)/uw
       endif
 
       flux_tau = kappa*ukstar*tauw*factro
-           
+
+      if(tw1.ne.tw1 .or. flux_tau.ne.flux_tau)then
+         write(*,*)tw1,flux_tau,utau
+         call exit(1)
+      endif
       return
       end
-c---------------------------------------------------------------------      
+c---------------------------------------------------------------------
+      real function futau(utau,up,cospsi,cosphi,u,k,if3d)
+      implicit none
+
+      real utau,up,cosphi,u,k
+
+      logical if3d
+      
+      real kappa,alp,bet,Ccon,yplusc,sCmu
+      common /forutau/ kappa,alp,bet,Ccon,yplusc,sCmu
+
+      real utauplus, upplus
+      real uc,cospsi,llim
+
+      llim = max(1e-8,-up*alp*kappa+sqrt(k*sCmu))
+      utau = max(llim,utau)
+      uc = utau+up
+      
+      utauplus = 0.
+      if(utau.ne.0. .and. uc.ne.0.)then
+         utauplus = (1./kappa)*(log(yplusc)+log(utau/uc)) + Ccon
+      endif
+         
+      upplus = 0.
+      if(up.ne.0. .and. uc.ne.0.)then
+         upplus = alp*(log(yplusc) + log(up/uc)) + bet
+      endif
+
+      cospsi = 1.0
+      if(utau.ne.0. .and. uc.ne.0.)then
+         cospsi = (u*cosphi - up*upplus)/(utauplus*utau)
+      endif
+      
+      if(.not.if3d)then
+         if(cospsi.ge.0.)then
+            cospsi = 1.
+         else
+            cospsi = -1.
+         endif
+      endif
+
+      futau = utau**2. + (up*alp*kappa)**2.
+     $     + 2.*up*alp*kappa*utau*cospsi - k*sCmu
+
+      return
+      end
+c---------------------------------------------------------------------            
+      subroutine newton_utau(utau,cospsi,up,cosphi,u,k,if3d,nid)
+      implicit none
+
+      real utau,cospsi,up,cosphi,u,k
+
+      logical if3d
+
+      real kappa,alp,bet,Ccon,yplusc,sCmu
+      common /forutau/ kappa,alp,bet,Ccon,yplusc,sCmu
+
+      real tol
+      integer  maxiter,i,nid
+
+      real uc,utauplus,upplus,utaunew
+      real f0,f1,f2
+      real utau2D
+
+      real ut0,ut1,futau
+
+      tol = 1e-8
+      maxiter = 20
+
+      if(up.eq.0.)then
+         utau = sqrt(k*sCmu)
+         cospsi = 0.
+         return
+      else
+         ut1 = utau !max(1e-8,-up*alp*kappa + sqrt(k*sCmu))
+         ut0 = ut1 + 1. !up*alp*kappa + sqrt(k*sCmu)
+              
+         do i=1,maxiter
+            f0 = futau(ut0,up,cospsi,cosphi,u,k,if3d)
+            f1 = futau(ut1,up,cospsi,cosphi,u,k,if3d)
+
+            if(abs(f1-f0).lt.tol)then
+               utau = ut0
+               exit
+            else
+               utau = ut0 - (ut1-ut0)*f0/(f1-f0)
+               ut0 = ut1
+               ut1 = utau
+               
+               f2 = futau(utau,up,cospsi,cosphi,u,k,if3d)
+               
+               if(abs(f2).lt.tol)then
+                  exit
+               endif
+               
+               if(i.ge.maxiter)then
+                  write(*,*)"Newton solver did not converge!",utau,f2
+               endif
+            endif
+         enddo
+      endif
+
+      return
+      end
