@@ -125,6 +125,23 @@ def main():
     plotnow(cases[0]+'_U_x0.5','$y$','$U$',y,vx,labels)
     plotnow(cases[0]+'_tke_x0.5','$y$','$k$',y,sc1,labels)
     plotnow(cases[0]+'_tau_x0.5','$y$','$\\tau$',y,sc2,labels)
+
+    x = []
+    y = []
+    vx = []
+    vy = []
+    p = []
+    temp = []
+    sc1 = []
+    sc2 = []
+    pltname = 'plot4.dat'
+    for i in range(len(cases)):
+        getdata(cases[i],pltname,x,y,vx,vy,p,temp,sc1,sc2)
+    labels = labels
+    plotnow(cases[0]+'_U_x0','$y$','$U$',y,vx,labels)
+    plotnow(cases[0]+'_tke_x0','$y$','$k$',y,sc1,labels)
+    plotnow(cases[0]+'_tau_x0','$y$','$\\tau$',y,sc2,labels)
+    
     # yplus = (H-y)*utau/nu
     # uplus = vx/utau
     # tkeplus = sc1/utau**2.

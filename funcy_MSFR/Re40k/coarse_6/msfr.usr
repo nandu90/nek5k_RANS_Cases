@@ -813,7 +813,7 @@ c---------------------------------------------------------------------
       real utau2D
 
       if(icalld.eq.0)then
-         call rzero(utold,lx1*ly1*lz1*nelt)
+         call rone(utold,lx1*ly1*lz1*nelt)
          icalld = 1
       endif
       
@@ -961,10 +961,13 @@ c---------------------------------------------------------------------
       return
       end
 c---------------------------------------------------------------------
-      real function futau(utau,up,cospsi,cosphi,u,k,if3d)
+      real function futau(utau,up,cospsi,cosphi,u,k,
+     $     if3d,sgncos,i,maxiter)
       implicit none
 
-      real utau,up,cosphi,u,k
+      real utau,up,cosphi,u,k,sgncos
+
+      integer i,maxiter
 
       logical if3d
       
@@ -973,7 +976,9 @@ c---------------------------------------------------------------------
 
       real utauplus, upplus
       real uc,cospsi,llim
-
+      
+!     The lower limit of utau is known
+!     Close to zero value would also work
       llim = max(1e-8,-up*alp*kappa+sqrt(k*sCmu))
       utau = max(llim,utau)
       uc = utau+up
@@ -987,20 +992,25 @@ c---------------------------------------------------------------------
       if(up.ne.0. .and. uc.ne.0.)then
          upplus = alp*(log(yplusc) + log(up/uc)) + bet
       endif
-
+         
       cospsi = 1.0
       if(utau.ne.0. .and. uc.ne.0.)then
          cospsi = (u*cosphi - up*upplus)/(utauplus*utau)
       endif
-      
+         
       if(.not.if3d)then
          if(cospsi.ge.0.)then
             cospsi = 1.
          else
             cospsi = -1.
          endif
+         if(i.le.maxiter/2)then
+            sgncos = cospsi
+         else
+            cospsi = sgncos     !fix angle to prevent sign change around zero
+         endif
       endif
-
+      
       futau = utau**2. + (up*alp*kappa)**2.
      $     + 2.*up*alp*kappa*utau*cospsi - k*sCmu
 
@@ -1020,11 +1030,11 @@ c---------------------------------------------------------------------
       real tol
       integer  maxiter,i,nid
 
-      real uc,utauplus,upplus,utaunew
+      real uc,utauplus,upplus
       real f0,f1,f2
-      real utau2D
-
+      
       real ut0,ut1,futau
+      real cpsi1,cpsi2,sgncos
 
       tol = 1e-8
       maxiter = 20
@@ -1034,23 +1044,25 @@ c---------------------------------------------------------------------
          cospsi = 0.
          return
       else
-         ut1 = utau !max(1e-8,-up*alp*kappa + sqrt(k*sCmu))
-         ut0 = ut1 + 1. !up*alp*kappa + sqrt(k*sCmu)
-              
+c     Initial guesses for utau
+         ut1 = utau 
+         ut0 = ut1 + 1. 
+
+         sgncos = 0.0
          do i=1,maxiter
-            f0 = futau(ut0,up,cospsi,cosphi,u,k,if3d)
-            f1 = futau(ut1,up,cospsi,cosphi,u,k,if3d)
+            f0 = futau(ut0,up,cpsi1,cosphi,u,k,if3d,sgncos,i,maxiter)
+            f1 = futau(ut1,up,cpsi2,cosphi,u,k,if3d,sgncos,i,maxiter)
 
             if(abs(f1-f0).lt.tol)then
                utau = ut0
+               cospsi = cpsi1
                exit
             else
                utau = ut0 - (ut1-ut0)*f0/(f1-f0)
+               f2 = futau(utau,up,cospsi,cosphi,u,k,
+     $              if3d,sgncos,i,maxiter)
                ut0 = ut1
                ut1 = utau
-               
-               f2 = futau(utau,up,cospsi,cosphi,u,k,if3d)
-               
                if(abs(f2).lt.tol)then
                   exit
                endif

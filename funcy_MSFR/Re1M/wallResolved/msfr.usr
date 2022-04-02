@@ -236,6 +236,14 @@ Cc turbulent outflow bc
          ptb(2) = 2.17
          ptb(3) = 0.
          call lineplot(pta,ptb,1001)
+
+         pta(1) = 0.0
+         pta(2) = 0.0
+         pta(3) = 0.
+         ptb(1) = 0.0
+         ptb(2) = 1.054
+         ptb(3) = 0.
+         call lineplot(pta,ptb,1001)
       endif
 
       return
