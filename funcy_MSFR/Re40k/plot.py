@@ -7,7 +7,7 @@ import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 
-def plotnow(fname,xlabel,ylabel,x,y,labels,ptype='line'):
+def plotnow(fname,tit,xlabel,ylabel,x,y,labels,ptype='line'):
     default_cycler = (cycler(color=['k','b','r','c','g','m'])*\
                       cycler(linestyle=['-'])*cycler(marker=['']))
     plt.rc('lines',linewidth=1)
@@ -27,7 +27,9 @@ def plotnow(fname,xlabel,ylabel,x,y,labels,ptype='line'):
             ax.semilogy(x[i],y[i],label=labels[i])
         else:
             ax.loglog(x[i],y[i],label=labels[i])
-
+    
+            
+    plt.title(tit,fontsize=18)
     ax.grid()
     ax.legend(loc='best',fontsize=12)
     fig.savefig(fname+'.png',quality=100,\
@@ -87,9 +89,10 @@ def main():
         getdata(cases[i],pltname,x,y,vx,vy,p,temp,sc1,sc2)
 
     labels = labels
-    plotnow(cases[0]+'_U_x-0.5','$y$','$U$',y,vx,labels)
-    plotnow(cases[0]+'_tke_x-0.5','$y$','$k$',y,sc1,labels)
-    plotnow(cases[0]+'_tau_x-0.5','$y$','$\\tau$',y,sc2,labels)
+    tit = "$x=-0.5$ (near inlet)"
+    plotnow(cases[0]+'_U_x-0.5',tit,'$y$','$U$',y,vx,labels)
+    plotnow(cases[0]+'_tke_x-0.5',tit,'$y$','$k$',y,sc1,labels)
+    plotnow(cases[0]+'_tau_x-0.5',tit,'$y$','$\\tau$',y,sc2,labels)
 
 
     x = []
@@ -105,9 +108,10 @@ def main():
         getdata(cases[i],pltname,x,y,vx,vy,p,temp,sc1,sc2)
 
     labels = labels
-    plotnow(cases[0]+'_U_y0.5','$x$','$U$',x,vx,labels)
-    plotnow(cases[0]+'_tke_y0.5','$x$','$k$',x,sc1,labels)
-    plotnow(cases[0]+'_tau_y0.5','$x$','$\\tau$',x,sc2,labels)
+    tit = "$y=0.5$"
+    plotnow(cases[0]+'_U_y0.5',tit,'$x$','$U$',x,vx,labels)
+    plotnow(cases[0]+'_tke_y0.5',tit,'$x$','$k$',x,sc1,labels)
+    plotnow(cases[0]+'_tau_y0.5',tit,'$x$','$\\tau$',x,sc2,labels)
 
     x = []
     y = []
@@ -122,9 +126,10 @@ def main():
         getdata(cases[i],pltname,x,y,vx,vy,p,temp,sc1,sc2)
 
     labels = labels
-    plotnow(cases[0]+'_U_x0.5','$y$','$U$',y,vx,labels)
-    plotnow(cases[0]+'_tke_x0.5','$y$','$k$',y,sc1,labels)
-    plotnow(cases[0]+'_tau_x0.5','$y$','$\\tau$',y,sc2,labels)
+    tit = "$x=0.5$ (near outlet)"
+    plotnow(cases[0]+'_U_x0.5',tit,'$y$','$U$',y,vx,labels)
+    plotnow(cases[0]+'_tke_x0.5',tit,'$y$','$k$',y,sc1,labels)
+    plotnow(cases[0]+'_tau_x0.5',tit,'$y$','$\\tau$',y,sc2,labels)
 
     x = []
     y = []
@@ -138,9 +143,10 @@ def main():
     for i in range(len(cases)):
         getdata(cases[i],pltname,x,y,vx,vy,p,temp,sc1,sc2)
     labels = labels
-    plotnow(cases[0]+'_U_x0','$y$','$U$',y,vx,labels)
-    plotnow(cases[0]+'_tke_x0','$y$','$k$',y,sc1,labels)
-    plotnow(cases[0]+'_tau_x0','$y$','$\\tau$',y,sc2,labels)
+    tit = "$x=0$"
+    plotnow(cases[0]+'_U_x0',tit,'$y$','$U$',y,vx,labels)
+    plotnow(cases[0]+'_tke_x0',tit,'$y$','$k$',y,sc1,labels)
+    plotnow(cases[0]+'_tau_x0',tit,'$y$','$\\tau$',y,sc2,labels)
     
     # yplus = (H-y)*utau/nu
     # uplus = vx/utau
