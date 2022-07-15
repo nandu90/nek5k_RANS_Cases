@@ -1,0 +1,256 @@
+C
+C  USER SPECIFIED ROUTINES: 
+C
+C     - boundary conditions 
+C     - initial conditions  
+C     - variable properties 
+C     - forcing function for fluid (f)
+C     - forcing function for passive scalar (q)
+C     - general purpose routine for checking errors etc.        
+C
+c-----------------------------------------------------------------------
+      include "experimental/rans_komg.f"
+      include "experimental/rans_wallfunctions.f"
+      include "/home/dshaver/NEKSOURCE/usrcode/limits.f"
+      include "/home/dshaver/NEKSOURCE/usrcode/utilities.f"
+      include "/home/dshaver/NEKSOURCE/usrcode/lineplot.f"
+c-----------------------------------------------------------------------
+      subroutine uservp (ix,iy,iz,eg)
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      integer ix,iy,iz,e,eg
+      real rans_mut,rans_mutsk,rans_mutso,rans_turbPrandtl
+      real mu_t,Pr_t
+
+      e = gllel(eg)
+
+      Pr_t=rans_turbPrandtl()
+      mu_t=rans_mut(ix,iy,iz,e)
+
+      if(ifield.eq.1) then
+        t(ix,iy,iz,e,4)=mu_t/cpfld(ifield,1) !store eddy viscosity for post processing
+        udiff = cpfld(ifield,1)+mu_t
+        utrans = cpfld(ifield,2)
+      elseif(ifield.eq.2) then
+        udiff = cpfld(ifield,1)+mu_t*cpfld(ifield,2)/(Pr_t*cpfld(1,2))
+        utrans = cpfld(ifield,2)
+      elseif(ifield.eq.3) then !use rho and mu from field 1
+        udiff = cpfld(1,1)+rans_mutsk(ix,iy,iz,e)
+        utrans = cpfld(1,2)
+      elseif(ifield.eq.4) then !use rho and mu from field 1
+        udiff = cpfld(1,1)+rans_mutso(ix,iy,iz,e)
+        utrans = cpfld(1,2)
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userf  (ix,iy,iz,ieg)
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+      common /cforce/ ffx_new,ffy_new,ffz_new
+
+      ffx = 0.0 !ffx_new ! This value determined from fixed U_b=1 case.
+      ffy = 0.0
+      ffz = 0.0
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userq  (ix,iy,iz,ieg)
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      common /rans_usr/ ifld_k, ifld_omega, m_id
+      integer ifld_k,ifld_omega, m_id
+
+      real rans_kSrc,rans_omgSrc
+     $   , rans_kDiag,rans_omgDiag
+
+      integer e,f,eg
+      ie = gllel(ieg)
+
+      if (ifield.eq.2) then
+        qvol = 0.0 !q_vol_periodic(ix,iy,iz,ie,ifield)
+        avol = 0.0
+      elseif (ifield.eq.ifld_k) then
+        qvol = rans_kSrc  (ix,iy,iz,ie)
+        avol = rans_kDiag (ix,iy,iz,ie)
+      elseif (ifield.eq.ifld_omega) then
+        qvol = rans_omgSrc (ix,iy,iz,ie)
+        avol = rans_omgDiag(ix,iy,iz,ie)
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userbc(ix,iy,iz,iside,eg) ! set up boundary conditions
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+c
+      integer ix,iy,iz,iside,e,eg
+      e = gllel(eg)
+
+      ux   = 0.0
+      uy   = 0.0
+      uz   = 0.0
+      temp = 0.00
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine useric (ix,iy,iz,eg)
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      integer ix,iy,iz,e,eg
+
+      e = gllel(eg)
+
+      ux   = 1.0
+      uy   = 0.0
+      uz   = 0.0
+      temp = 0.0
+
+      if(ifield.eq.3) temp = 0.01
+      if(ifield.eq.4) temp = 0.2
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userchk()
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+
+      real flow_rate,base_flow,dom_len,xsec,scale_vf(3)
+      common /cvflow_r/ flow_rate,base_flow,dom_len,xsec,scale_vf
+
+      real wd
+      common /walldist/ wd(lx1,ly1,lz1,lelv)
+
+      real glsc3,bc_average,rans_turbPrandtl
+      real Twall,Tbulk,Nuss
+      real ptA(3),ptB(3),xmin,xmax,ymin,ymax,zmin,zmax
+      integer ie,ifc,ifld,n
+
+      n= lx1*ly1*lz1*nelv
+
+      if(mod(istep,100).eq.0)then
+         call print_limits
+         call y_p_limits(wd,.true.)
+         
+         Tbulk = glsc3(t,vx,bm1,n)
+         Twall = bc_average(t,'f  ',2)
+         Nuss  = 1.0/((Twall-Tbulk)*cpfld(2,1))
+         if(nio.eq.0) then
+            write(*,*)"Darcy   = ",2.0*scale_vf(1)
+            write(*,*)"Nusselt = ",Nuss
+         endif 
+      endif
+
+      if(istep.eq.nsteps) then
+         ptA(1) = 0.0
+         ptA(2) = 0.0
+         ptA(3) = 0.0
+         ptB(1) = 0.0
+         ptB(2) = 1.0
+         ptB(3) = 0.0
+
+        call lineplot(ptA,ptB,10001)
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat   ! This routine to modify element vertices
+      implicit none
+      include 'SIZE'      ! _before_ mesh is generated, which 
+      include 'TOTAL'     ! guarantees GLL mapping of mesh.
+
+      param(54) =-1
+      param(55) = 1.0
+
+      param(120) = nsteps
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat2()
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+
+      real wd
+      common /walldist/ wd(lx1,ly1,lz1,lelv)
+
+      common /rans_usr/ ifld_k, ifld_omega, m_id
+      integer ifld_k,ifld_omega, m_id
+
+      integer w_id,imid,i
+      real coeffs(30) !array for passing your own coeffs
+      logical ifcoeffs
+
+      real w1,w2,w3,w4,w5
+      real el(lx1,ly1,lz1,lelv)
+      common /SCRNS/
+     & w1(lx1*ly1*lz1*lelv)
+     &,w2(lx1*ly1*lz1*lelv)
+     &,w3(lx1*ly1*lz1*lelv)
+     &,w4(lx1*ly1*lz1*lelv)
+     &,w5(lx1*ly1*lz1*lelv)
+
+      ifld_k     = 3 !address of tke equation in t array
+      ifld_omega = 4 !address of omega equation in t array
+      ifcoeffs=.false. !set to true to pass your own coeffs
+
+C     Supported models:
+c      m_id = 0 !regularized standard k-omega (no wall functions)
+c      m_id = 1 !regularized low-Re k-omega (no wall functions)
+c      m_id = 2 !regularized standard k-omega SST (no wall functions)
+c      m_id = 3 !non-regularized standard k-omega (wall functions)
+c      m_id = 4 !non-regularized standard k-tau
+      m_id = 5 !non-regularized low Re k-tau 
+c      m_id = 6 !non-regularized standard k-tau SST
+
+C     Wall distance function:
+      w_id = 0 ! user specified
+c      w_id = 1 ! cheap_dist (path to wall, may work better for periodic boundaries)
+c      w_id = 2 ! distf (coordinate difference, provides smoother function)
+
+c     call cheap_dist(wd,1,'W  ') 
+c      call distf(wd,1,'shl',w1,w2,w3,w4,w5)
+c     call distf2(wd,1,'shl','W  ',w1,w2,w3,w4,w5)
+
+       do i=1,lx1*ly1*lz1*lelv
+          wd(i,1,1,1) = 1.0-ym1(i,1,1,1)
+       enddo
+
+      call rans_init(ifld_k,ifld_omega,ifcoeffs,coeffs,w_id,wd,m_id,
+     $      .true.,'W  ')
+
+c store del ywd to use for omega BC in userbc 
+c      call get_gradywd
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat3()  ! This routine to modify mesh coordinates
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+
+      call count_boundaries
+
+      return
+      end
+c-----------------------------------------------------------------------
