@@ -1,0 +1,104 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  4.1                                   |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      fvSolution;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+/*The solver stops if any one of the following conditions are reached:
+• the residual falls below the solver tolerance, tolerance ;
+• the ratio of current to initial residuals falls below the solver relative tolerance, relTol;
+• the number of iterations exceeds a maximum number of iterations, maxIter;*/
+solvers
+{
+    "pcorr.*"
+    {
+        solver          GAMG;
+        smoother        DICGaussSeidel;
+        tolerance       1e-4;
+        relTol          0.05;
+    }
+
+    p
+    {
+        $pcorr;
+	relTol          0;
+    }
+
+    pFinal
+    {
+        $p;
+        relTol          0;
+    }
+
+    "(U|k|epsilon|omega|s)"
+    {
+        solver          PBiCGStab;
+        preconditioner  DILU;
+        tolerance       1e-6;
+        relTol          0.05;
+    }
+
+    "(U|k|epsilon|omega|s)Final"
+    {
+        $U;
+        relTol          0;
+    }
+}
+
+PIMPLE
+  {
+    nNonOrthogonalCorrectors      1; // Korrigieren des Drucks mit den neu berechneten Drücken
+    nOuterCorrectors         70; // Berechnung des Drucks - Momenten Kopplung
+    nCorrectors             3;    // korrigieren des Drucks
+      /*relaxationFactors
+      {
+      fields
+      {
+          p       0.2;
+          pFinal  1;  // Last outer loop
+      }
+
+      equations
+      {
+          U       0.6;
+          UFinal  1;// Last outer loop
+      }
+      }*/
+      residualControl
+      {
+	U 1e-6;
+	p 1e-5;
+      }
+      outerCorrectorResidualControl
+	{
+	  "(U|k|omega|epsilon)"
+	    {
+	      relTol          0;
+	      tolerance       1e-6;
+	    }
+	  p
+	    {
+	      relTol 0;
+	      tolerance   1e-4;
+	    }
+	}
+    }
+
+relaxationFactors
+{
+    equations
+    {
+        ".*"            1;
+    }
+}
+// ************************************************************************* //
