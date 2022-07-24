@@ -1,0 +1,1241 @@
+      include "experimental/rans_komg.f"
+      include "experimental/rans_wallfunctions.f"
+      include "experimental/limits.f"
+      include "experimental/utilities.f"
+      include "experimental/lineplot.f"      
+
+C
+C  USER SPECIFIED ROUTINES: 
+C
+C     - boundary conditions 
+C     - initial conditions  
+C     - variable properties 
+C     - forcing function for fluid (f)
+C     - forcing function for passive scalar (q)
+C     - general purpose routine for checking errors etc.        
+C
+c-----------------------------------------------------------------------
+      subroutine uservp (ix,iy,iz,ieg)
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      common /rans_usr/ ifld_k, ifld_omega, m_id
+      integer ifld_k,ifld_omega, m_id
+
+      real coeffs(30)
+      save coeffs
+
+      integer icalld
+      save    icalld
+      data    icalld /0/
+
+      ie     = gllel(ieg)
+
+      if(icalld.eq.0) then
+         udiff =param(2)
+         utrans=param(1)  ! this is the density
+         call rans_komg_getcoeffs(coeffs) 
+         icalld = 1
+      endif
+
+      if (ifield.eq.1) then
+
+         utrans= param (1)  ! this is the density
+! laminar + turbulent viscosity (computed in subroutine compute_rans)
+         udiff = param (2)
+         udiff = udiff + rans_mut(ix,iy,iz,ie)
+
+      elseif (ifield.eq.2) then
+
+         utrans= param (7)  ! rhoCp
+! laminar + turbulent thermal conductivity (computed in subroutine compute_rans)
+         udiff = param (8)
+         Pr_t  = coeffs(1)
+         udiff = udiff + rans_mut(ix,iy,iz,ie)/Pr_t
+
+      elseif (ifield.eq.ifld_k) then
+
+         utrans= param (1)  ! this is the density
+!computed in subroutine compute_rans )
+         udiff = param (2)
+         sigk  = coeffs(2)
+         udiff = udiff + rans_mutsk(ix,iy,iz,ie)
+
+c         udiff1= rans_mutsk(ix,iy,iz,ie)
+c         udiff = udiff + udiff1
+c         if(nid.eq.0) write(*,*) 'eddy visc ', x,y,udiff, udiff1
+
+      elseif (ifield.eq.ifld_omega) then
+
+         utrans= param (1)  ! this is the density
+!computed in subroutine compute_rans )
+         udiff = param (2)
+         sigomg= coeffs(3)
+         udiff = udiff + rans_mutso(ix,iy,iz,ie)
+
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userf  (ix,iy,iz,ieg)
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      ie = gllel(ieg)
+      visc  = param(2)
+
+      ffx = 0.0
+      ffy = t(ix,iy,iz,ie,1)
+      ffz = 0.0
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userq  (ix,iy,iz,ieg)
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      common /WFPAR/ kappa, Lref, Uref, gacc, tht0, ifSGDH, ifGGDH
+     $              ,buo_kSrc(lx1,ly1,lz1,lelv), gvec(3)
+      real kappa, Lref
+      logical ifSGDH, ifGGDH
+
+      common /rans_usr/ ifld_k, ifld_omega, m_id
+      integer ifld_k,ifld_omega, m_id
+
+      real rans_kSrc,rans_omgSrc
+     $   , rans_kDiag,rans_omgDiag
+
+      integer icalld
+      save    icalld
+      data    icalld /0/
+
+      ie = gllel(ieg)
+
+      if (ifield.eq.2) then
+        qvol = 0.0 ! src_t    (ix,iy,iz,ie)
+        avol = 0.0
+      elseif (ifield.eq.ifld_k) then
+        qvol = rans_kSrc  (ix,iy,iz,ie) + buo_kSrc(ix,iy,iz,ie)
+        avol = rans_kDiag (ix,iy,iz,ie)
+      elseif (ifield.eq.ifld_omega) then
+        qvol = rans_omgSrc (ix,iy,iz,ie)
+        avol = rans_omgDiag(ix,iy,iz,ie)
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userbc (ix,iy,iz,iside,ieg)
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      integer icalld
+      save    icalld
+      data    icalld /0/
+
+      real wd
+      real k,mut, kmax
+      common /walldist/ wd(lx1,ly1,lz1,lelv)
+
+      common /rans_usr/ ifld_k, ifld_omega, m_id
+      integer ifld_k,ifld_omega, m_id
+
+      real kwall, kappa, kwallo
+      real usn(3), tsn(3), bsn(3)
+      character*3 cbv3, cbt3, cbk3, cbo3
+
+      ntot = lx1*ly1*lz1*lelv
+      ie = gllel(ieg)
+
+      cbv3 = cbc(iside,ie,1)
+      cbt3 = cbc(iside,ie,2)
+      cbk3 = cbc(iside,ie,ifld_k)
+      cbo3 = cbc(iside,ie,ifld_omega)
+
+      if     (ifield.eq.1) then
+         ux = 0.
+         uy = 0.
+         uz = 0.
+      elseif (ifield.eq.2) then
+         temp= (1.-x)-0.5
+      elseif (ifield.eq.ifld_k) then
+         temp= 0.
+      elseif (ifield.eq.ifld_omega) then
+         temp= 0.
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine useric (ix,iy,iz,ieg)
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      real k,mut, kmax, kappa
+      common /rans_usr/ ifld_k, ifld_omega, m_id
+      integer ifld_k,ifld_omega, m_id
+      real wd
+      common /walldist/ wd(lx1,ly1,lz1,lelv)
+
+      integer idum
+      save    idum 
+      data    idum / 0 /
+
+      if (idum.eq.0) idum = 99 + nid
+
+      ie     = gllel(ieg)
+
+      visc  = param(2)
+      C_mu  = 0.09
+      sCmu  = 0.3
+      kappa = 0.4
+      Econ  = 9.
+      beta0 = 0.072 ! 0.0708
+
+      Re    = 1.0/param(2)
+      darcy = 0.316/(Re**0.25)
+      utau  = sqrt(darcy/8.0)
+      sigm  = 0.6
+      kmax  = 3.9201E-03
+      omax  = 0.5
+      yplus = max(wd(ix,iy,iz,ie)*utau*Re,1.0e-6)
+      yp0   = 60.0 !varies with Re
+
+      ux   = 0.0
+      uy   = 0.0
+      uz   = 0.0
+      temp = 0.0
+
+      yd = wd(ix,iy,iz,ie)
+      tau = 0.
+      omeg= 0.
+      if(yd.ne.0) then
+         omeg = omax + 6./Re/0.075/yd**2
+         tau = 1. / omeg
+      endif
+
+!entire domain initialized to a reference temperature, zero velocity
+! and inlet K and omega values
+c ---
+
+      if (ifield.eq.2) then
+         temp= (1.-x)-0.5
+      elseif (ifield.eq.ifld_k) then
+         temp= kmax
+      elseif (ifield.eq.ifld_omega) then
+         temp = omeg
+         if(m_id.ge.4) temp = tau
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userchk
+      include 'SIZE'
+      include 'TOTAL'
+      include 'RANS_KOMG'
+      include 'AVG'
+
+      common /scruz/ u_x (lx1,ly1,lz1,lelv),u_y (lx1,ly1,lz1,lelv)
+     $              ,u_z (lx1,ly1,lz1,lelv),v_x (lx1,ly1,lz1,lelv)
+     $              ,v_y (lx1,ly1,lz1,lelv),v_z (lx1,ly1,lz1,lelv)
+     $              ,w_x (lx1,ly1,lz1,lelv),w_y (lx1,ly1,lz1,lelv)
+     $              ,w_z (lx1,ly1,lz1,lelv),tmp (lx1,ly1,lz1,lelv)
+
+      common /scrns/ t_x(lx1,ly1,lz1,lelt)
+     $              ,t_y(lx1,ly1,lz1,lelt)
+     $              ,t_z(lx1,ly1,lz1,lelt)
+
+      common /WFPAR/ kappa, Lref, Uref, gacc, tht0, ifSGDH, ifGGDH
+     $              ,buo_kSrc(lx1,ly1,lz1,lelv), gvec(3)
+      real kappa, Lref
+      logical ifSGDH, ifGGDH
+
+      common /cforce/ ffx_new,ffy_new,ffz_new
+c      integer ifld_k,ifld_omega, m_id
+
+      parameter (lxyz=lx1*ly1*lz1)
+
+      real x0(3)
+      save x0
+
+      integer icalld
+      save    icalld
+      data    icalld /0/
+
+      integer icount
+      save    icount
+
+      integer e
+      logical ifverbose
+      real pta(3),ptb(3)
+      
+      ntot1= nx1*ny1*nz1*nelv
+      ntot2= nx2*ny2*nz2*nelv
+      ntot = nx1*ny1*nz1*nelv
+
+      if(icalld.eq.0) then
+         call rans_komg_getcoeffs(coeffs)
+         icalld = 1
+      endif
+
+c$$$      ifxyo = .false.
+c$$$      if (istep.lt.1) then
+c$$$        ifxyo = .true.
+c$$$        call outpost2(vx,vy,vz,pr,t,ldimt,'   ')
+c$$$      endif
+
+      call gradm1  (u_x, u_y, u_z, vx)
+      call gradm1  (v_x, v_y, v_z, vy)
+      if(if3d) call gradm1  (w_x, w_y, w_z, vz)
+
+      call opcolv  (u_x, u_y, u_z,bm1)
+      call opcolv  (v_x, v_y, v_z,bm1)
+      if(if3d) call opcolv  (w_x, w_y, w_z,bm1)
+
+      call opdssum (u_x, u_y, u_z)
+      call opdssum (v_x, v_y, v_z)
+      if(if3d) call opdssum (w_x, w_y, w_z)
+
+      call opcolv  (u_x, u_y, u_z,binvm1)
+      call opcolv  (v_x, v_y, v_z,binvm1)
+      if(if3d) call opcolv  (w_x, w_y, w_z,binvm1)
+
+      call gradm1  (t_x, t_y, t_z, t )
+      call opcolv  (t_x, t_y, t_z,bm1)
+      call opdssum (t_x, t_y, t_z)
+      call opcolv  (t_x, t_y, t_z,binvm1)
+
+      Pr_t  = coeffs(1)
+      Re    = 1./param(2)
+
+      call rzero(buo_kSrc,ntot)
+
+      if(ifSGDH) then
+
+        do ie=1,nelv
+        do iz=1,nz1
+        do iy=1,ny1
+        do ix=1,nx1
+          mu_t  = rans_mut(ix,iy,iz,ie)
+          k     =        t(ix,iy,iz,ie,ifld_k-1)
+          tau   =        t(ix,iy,iz,ie,ifld_omega-1)
+          rho   = vtrans  (ix,iy,iz,ie,1)
+          diffs = mu_t/Pr_t
+
+          buo_kSrc(ix,iy,iz,ie) = diffs*(t_x(ix,iy,iz,ie)*gvec(1)
+     $         +t_y(ix,iy,iz,ie)*gvec(2)+t_z(ix,iy,iz,ie)*gvec(3))
+
+        enddo
+        enddo
+        enddo
+        enddo
+
+      endif
+
+      if(ifGGDH) then
+
+        do ie=1,nelv
+        do iz=1,nz1
+        do iy=1,ny1
+        do ix=1,nx1
+          mu_t  = rans_mut(ix,iy,iz,ie)
+          k     =        t(ix,iy,iz,ie,ifld_k-1)
+          tau   =        t(ix,iy,iz,ie,ifld_omega-1)
+          rho   = vtrans  (ix,iy,iz,ie,1)
+          diffg = 1.5/Pr_t
+
+          if(if3d) then
+            tm1=2.*(mu_t* u_x(ix,iy,iz,ie)-rho*k/3.)
+            tm2=2.*(mu_t* v_y(ix,iy,iz,ie)-rho*k/3.)
+            tm3=2.*(mu_t* w_z(ix,iy,iz,ie)-rho*k/3.)
+            tm4=    mu_t*(v_x(ix,iy,iz,ie)+u_y(ix,iy,iz,ie))
+            tm5=    mu_t*(w_y(ix,iy,iz,ie)+v_z(ix,iy,iz,ie))
+            tm6=    mu_t*(w_x(ix,iy,iz,ie)+u_z(ix,iy,iz,ie))
+            term=    (tm1*t_x(ix,iy,iz,ie)+tm4*t_y(ix,iy,iz,ie)
+     $                                    +tm6*t_z(ix,iy,iz,ie))*gvec(1)
+     $             + (tm4*t_x(ix,iy,iz,ie)+tm2*t_y(ix,iy,iz,ie)
+     $                                    +tm5*t_z(ix,iy,iz,ie))*gvec(2)
+     $             + (tm6*t_x(ix,iy,iz,ie)+tm5*t_y(ix,iy,iz,ie)
+     $                                    +tm3*t_z(ix,iy,iz,ie))*gvec(3)
+          else
+            tm1=2.*(mu_t* u_x(ix,iy,iz,ie)-rho*k/3.)
+            tm2=2.*(mu_t* v_y(ix,iy,iz,ie)-rho*k/3.)
+            tm3=    mu_t*(v_x(ix,iy,iz,ie)+u_y(ix,iy,iz,ie))
+            term=    (tm1*t_x(ix,iy,iz,ie)+tm3*t_y(ix,iy,iz,ie))*gvec(1)
+     $             + (tm3*t_x(ix,iy,iz,ie)+tm2*t_y(ix,iy,iz,ie))*gvec(2)
+          endif
+
+          buo_kSrc(ix,iy,iz,ie) =-diffg*term*tau
+
+        enddo
+        enddo
+        enddo
+        enddo
+
+      endif
+
+      if(mod(istep,100).eq.0) then
+        call print_limits
+        call y_p_limits(wd,.true.)
+      endif
+
+      call avg_all
+
+      if(istep.eq.nsteps .or. istep.eq.nsteps/2)then
+         call copy(urms,vx,ntot)
+         call copy(vrms,vy,ntot)
+         if(if3d)call copy(wrms,vz,ntot)
+         do i=1,ldimt
+            call copy(trms(1,1,1,1,i),t(1,1,1,1,i),ntot)
+         enddo
+         
+         call copy(vx,uavg,ntot)
+         call copy(vy,vavg,ntot)
+         if(if3d)call copy(vz,wavg,ntot)
+         do i=1,ldimt
+            call copy(tavg(1,1,1,1,i),t(1,1,1,1,i),ntot)
+         enddo
+
+         pta(1) = 0.0
+         pta(2) = 0.5
+         pta(3) = 0.0
+         ptb(1) = 1.0
+         ptb(2) = 0.5
+         ptb(3) = 0.0
+         call lineplot(pta,ptb,1001)
+         
+         call copy(vx,urms,ntot)
+         call copy(vy,vrms,ntot)
+         if(if3d)call copy(vz,wrms,ntot)
+         do i=1,ldimt
+            call copy(t(1,1,1,1,i),trms(1,1,1,1,i),ntot)
+         enddo
+         
+      endif
+      
+      ifkomega = 1
+c
+c     Below is just for postprocessing ...
+c
+      if(ifkomega.eq.1) call post_minmax
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat   ! This routine to modify element vertices
+      include 'SIZE'      ! _before_ mesh is generated, which 
+      include 'TOTAL'     ! guarantees GLL mapping of mesh.
+
+      return
+      one  = 1.
+      pi   = 4.*atan(one)
+      twopi= 2.*pi
+      fctr  =1.0
+      fctr2 =fctr*fctr
+
+      xlen = 0.5 ! twopi*fctr2  !  Here, map domain onto pi x [-1,1] x 2pi
+      zlen = pi*fctr      !  Assume that y is already in [-1,1].
+
+      n=8*nelv
+      xmin = glmin(xc,n)
+      xmax = glmax(xc,n)
+c      zmin = glmin(zc,n)
+c      zmax = glmax(zc,n)
+
+      xscale = xlen/(xmax-xmin)
+c      zscale = zlen/(zmax-zmin)
+
+      do i=1,n
+         x       = xc(i,1)
+         xc(i,1) = xscale*x
+
+c         z       = zc(i,1)
+c         zc(i,1) = zscale*z
+      enddo
+
+      param(59) = 0     ! all elements are _undeformed_
+
+      n = nx1*ny1*nz1*nelt 
+
+      ! enable stress formulation if we use PN-PN-2 
+      if(lx1.ne.lx2 .and. param(30).gt.0) IFSTRS = .true.
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat2()  ! This routine to modify mesh coordinates
+
+c      implicit none
+
+      include 'SIZE'
+      include 'TOTAL'
+
+!ascii      param(66) = 0
+!ascii      param(67) = 0
+        param(66) = 4.
+        param(67) = 4.
+
+!4 = bin, 0 = ascii
+!       ifchar=.true.
+      do iel=1,nelt
+      do ifc=1,2*ndim
+c         cbc(ifc,iel,2) = cbc(ifc,iel,1)
+c         if (cbc(ifc,iel,1) .eq. 'W  ') cbc(ifc,iel,1) = 'shl'
+c         if (cbc(ifc,iel,1) .eq. 'shl') cbc(ifc,iel,2) = 't  '
+      enddo
+      enddo
+
+      call gen_rea(2)
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat3
+      include 'SIZE'
+      include 'TOTAL'
+
+      integer icalld
+      save    icalld
+      data    icalld /0/
+
+      common /WFPAR/ kappa, Lref, Uref, gacc, tht0, ifSGDH, ifGGDH
+     $              ,buo_kSrc(lx1,ly1,lz1,lelv), gvec(3)
+      real kappa, Lref
+      logical ifSGDH, ifGGDH
+
+      real ywdx,ywdy,ywdz,ywdc
+      common /gradywd/ ywdx(lx1,ly1,lz1,lelv),ywdy(lx1,ly1,lz1,lelv)
+     $                ,ywdz(lx1,ly1,lz1,lelv),ywdc(lx1,ly1,lz1,lelv)
+
+      integer e,f
+      integer i
+      real wd
+      common /walldist/ wd(lx1,ly1,lz1,lelv)
+
+      common /rans_usr/ ifld_k, ifld_omega, m_id
+      integer ifld_k,ifld_omega, m_id
+
+      integer w_id,imid
+      real coeffs(30) !array for passing your own coeffs
+      logical ifcoeffs, ifrans_diag
+
+      real w1,w2,w3,w4,w5
+      real el(lx1,ly1,lz1,lelv)
+      common /SCRNS/
+     & w1(lx1*ly1*lz1*lelv)
+     &,w2(lx1*ly1*lz1*lelv)
+     &,w3(lx1*ly1*lz1*lelv)
+     &,w4(lx1*ly1*lz1*lelv)
+     &,w5(lx1*ly1*lz1*lelv)
+
+      if(icalld.eq.0) then
+        kappa = 0.4
+        Lref  = 0.75  ! m
+        Uref  = 1.0   ! m/s
+        g     = 9.81  ! m/s2
+        betDT = Uref**2/Lref/g ! beta*DT, DT=40K
+        tht0  = 303.0 ! K
+
+c commponents of gravity direction unit vector
+        gacc  = Lref*g/Uref/Uref ! non-dimensional gravity
+        gvec(1) = 0.
+        gvec(2) =-1. ! here gravity is in the negative y-direction (non-dim is 1)
+        gvec(3) = 0.
+
+        ifSGDH = .false.
+        ifGGDH = .true.
+        if(ifSGDH.and.ifGGDH) then
+           if(nid.eq.0) write(*,*) 'SGDH and GGDH cannot both be true '
+     $                                                ,ifSGDH, ifGGDH
+        call exitt()
+        endif
+
+        if(nid.eq.0) then
+          write(*,'(A,10(1X,G14.7))') 'Parameters cavity **************'
+          write(*,'(A,10(1X,G14.7))') 'Buoyancy SGDH GGDH',ifSGDH,ifGGDH
+          write(*,'(A,10(1X,G14.7))') 'Lref [m] Uref [m/s] ',Lref, Uref
+          write(*,'(A,10(1X,G14.7))') 'Tref [K] beta*DT gacc '
+     $                                                ,tht0, betDT, gacc
+          write(*,'(A,10(1X,G14.7))') 'gravity direction  x y z'
+     $                                        ,gvec(1), gvec(2), gvec(3)
+        endif
+
+         icalld = 1
+      endif
+
+      ifld_k     = 3 !address of tke equation in t array
+      ifld_omega = 4 !address of omega equation in t array
+      ifcoeffs=.false. !set to true to pass your own coeffs
+      ifrans_diag = .true. ! Split diag of production term into implicit
+c      ifrans_diag = .false.
+
+C     Supported models:
+c      m_id = 0 !regularized standard k-omega (no wall functions)
+c      m_id = 1 !regularized low-Re k-omega (no wall functions)
+c      m_id = 2 !regularized standard k-omega SST (no wall functions)
+c      m_id = 3 !non-regularized standard k-omega (wall functions)
+      m_id = 4 !non-regularized standard k-tau
+c      m_id = 5 !non-regularized low Re k-tau 
+c      m_id = 6 !non-regularized standard k-tau SST
+
+C     Wall distance function:
+      w_id = 0 ! user specified
+c      w_id = 1 ! cheap_dist (path to wall, may work better for periodic boundaries)
+c      w_id = 2 ! distf (coordinate difference, provides smoother function)
+
+c     call cheap_dist(wd,1,'W  ') 
+      call distf(wd,1,'W  ',w1,w2,w3,w4,w5)
+
+c      do i=1,lx1*ly1*lz1*lelv
+c         wd(i,1,1,1) = 1.+ym1(i,1,1,1)
+c      enddo
+
+      call rans_init(ifld_k,ifld_omega
+     $             ,ifcoeffs,coeffs,w_id,wd,m_id,ifrans_diag)
+      do e=1,nelv
+        call cfill(el(1,1,1,e),real(lglel(e)),nx1*ny1*nz1)
+      enddo
+c      call outpost(el,wd,vz,t,pr,'ywd')
+
+c store del ywd to use for omega BC in userbc 
+      call get_gradywd
+      call get_mol_visc
+
+      if (nio.eq.0) write(*,*)'end of userdat3'
+      return
+      end
+
+C-----------------------------------------------------------------------
+      subroutine get_mol_visc
+      include 'SIZE'
+      include 'TOTAL'
+
+      common /viscmol/mul   (lx1,ly1,lz1,lelv), mul_dx(lx1,ly1,lz1,lelv)
+     $               ,mul_dy(lx1,ly1,lz1,lelv), mul_dz(lx1,ly1,lz1,lelv)
+      real mul, mul_dx, mul_dy, mul_dz
+
+      integer ix,iy,iz,e,eg
+
+      Re    = 1. /param(2)
+      pi1   = 4.0*atan(1.0)
+
+      write(*,*) 'mu Re ', param(2), Re
+
+      do e =1,nelv
+      do iz=1,nz1
+      do iy=1,ny1
+      do ix=1,nx1
+        xx=xm1(ix,iy,iz,e)
+        mul(ix,iy,iz,e)=1./Re
+      enddo
+      enddo
+      enddo
+      enddo
+
+      call opgrad  (mul_dx,mul_dy,mul_dz,mul)
+      call opdssum (mul_dx,mul_dy,mul_dz)
+      call opcolv  (mul_dx,mul_dy,mul_dz,binvm1)
+
+      return
+      end
+
+c-----------------------------------------------------------------------
+c$$$      subroutine set_forcing(f_new,u,idir) ! driving force for Ubar = 1
+c$$$
+c$$$      include 'SIZE'
+c$$$      include 'TOTAL'
+c$$$
+c$$$      real u(1)
+c$$$
+c$$$      common /cforce/ ffx_new,ffy_new,ffz_new
+c$$$      common /uforce/ utldo(ldim)
+c$$$
+c$$$      n=nx1*ny1*nz1*nelv
+c$$$
+c$$$      if (istep.eq.0) f_new=param(71)  ! Update forcing for Ubar = 1
+c$$$
+c$$$      u_targ  = 1.
+c$$$      ubar    = glsc2(u,bm1,n)/volvm1
+c$$$      utilde  = ubar/u_targ
+c$$$
+c$$$      if (istep.gt.0) f_new = 0.5 * (f_new + f_new/utilde)
+c$$$
+c$$$      if (istep.gt.5) then
+c$$$         alpha = abs(utilde-utldo(idir))/dt
+c$$$         if(nid.eq.0) write(*,*) 'force ', istep, alpha 
+c$$$         alpha = min(alpha,0.05)
+c$$$         if     (utilde.gt.1.and.utilde.gt.utldo(idir)) then
+c$$$            f_new = (1-alpha)*f_new
+c$$$         elseif (utilde.lt.1.and.utilde.lt.utldo(idir)) then
+c$$$            f_new = (1+alpha)*f_new
+c$$$         endif
+c$$$      endif
+c$$$      utldo(idir)   = utilde
+c$$$
+c$$$      f_min = 0.00001                 ! ad hoc limits
+c$$$      f_new = max(f_new,f_min)
+c$$$      
+c$$$      f_max = 0.10000                 ! ad hoc limits
+c$$$      f_new = min(f_new,f_max)
+c$$$      
+c$$$      return
+c$$$      end
+c$$$c
+c$$$c-----------------------------------------------------------------------
+      subroutine post_minmax
+      include 'SIZE'
+      include 'TOTAL'
+      include 'RANS_KOMG'
+
+      parameter (lxyz=lx1*ly1*lz1)
+c      common /rans_usr/ ifld_k, ifld_omega, m_id
+c      integer ifld_k,ifld_omega, m_id
+
+      common/visturb/ anu(lx1,ly1,lz1,lelv)
+     $               ,srk(lx1,ly1,lz1,lelv)
+     $               ,sro(lx1,ly1,lz1,lelv)
+
+      common/tangstrain/ tangst(lx1,ly1,lz1,lelv)
+
+      real dudx(lx1,ly1,lz1,lelv)
+     $    ,dudy(lx1,ly1,lz1,lelv)
+     $    ,dudz(lx1,ly1,lz1,lelv)
+
+      n = nx1*ny1*nz1*nelt
+
+      call gradm1 (dudx,dudy,dudz,VX)
+      call col2   (dudy,bm1       ,n)
+      call dssum  (dudy, nx1,ny1,nz1)
+      call col2   (dudy,binvm1    ,n)
+
+      call copy   (tangst,dudy    ,n)
+
+      tmin = glmin(t ,n)
+      tmax = glmax(t ,n)
+      umax = glmax(vx,n)
+      umin = glmin(vx,n)
+      vmax = glmax(vy,n)
+      vmin = glmin(vy,n)
+      dumax = glmax(dudy ,n)
+
+      akmax = glmax(T(1,1,1,1,ifld_k-1),n)
+      akmin = glmin(T(1,1,1,1,ifld_k-1),n)
+
+      o_max = glmax(T(1,1,1,1,ifld_omega-1),n)
+      o_min = glmin(T(1,1,1,1,ifld_omega-1),n)
+
+c      dmin = akmax/param(2)/dumax
+      dmax = sqrt(dumax/param(2)) 
+      dmin = param(2)*dmax
+
+      do ie = 1,nelv
+      do k = 1,nz1
+      do j = 1,ny1
+      do i = 1,nx1
+! solve for omega pert
+      uux = vx(i,j,k,ie)
+      uuy = vy(i,j,k,ie)
+c      anu(i,j,k,ie)=vdiff(i,j,k,ie,1) !rans_komg_mut(i,j,k,ie)
+c      srk(i,j,k,ie)=0.                !rans_komg_kSrc(i,j,k,ie)
+c      sro(i,j,k,ie)=0.                !rans_komg_omgSrc(i,j,k,ie)
+      anu(i,j,k,ie)=mut(i,j,k,ie)
+      srk(i,j,k,ie)=kSrc(i,j,k,ie)
+      sro(i,j,k,ie)=omgSrc(i,j,k,ie)
+
+      enddo
+      enddo
+      enddo
+      enddo
+
+      anu_max = glmax(anu,n)
+      anu_min = glmin(anu,n)
+
+      if (nid.eq.0) then
+           write(6,2) istep,dt,time,umin,umax,' u-max'
+           write(6,2) istep,dt,time,vmin,vmax,' v-max'
+           write(6,2) istep,dt,time,tmin,tmax,' t-max'
+           write(6,2) istep,dt,time,akmin,akmax,' K-max'
+           write(6,2) istep,dt,time,o_min,o_max,' O-max'
+           write(6,2) istep,dt,time,dmin,dmax,' Cf-max'
+           write(6,2) istep,dt,time,anu_min,anu_max,' nu-max'
+           write(6,2) istep,dt,time,anu_min*param(2)
+     $        ,anu_max*param(2),' nu-ratio'
+      endif
+
+ 2     format(i9,4e17.7,a8)
+c$$$       if(mod(istep,iostep).eq.0 .and. istep.ge.0) then
+c$$$          call outpost2(anu,srk,vz,sro,t,3,'dif')
+c$$$       endif
+
+      return
+      end
+c$$$c-----------------------------------------------------------------------
+c$$$        real function find_root_utau(u,S,visc)
+c$$$        implicit real(a-h,o-z)
+c$$$        parameter (n=100)
+c$$$
+c$$$        external func_utau
+c$$$        external fder_utau
+c$$$
+c$$$        tol = 1.e-8
+c$$$        utauo = 0.1
+c$$$        do i=1,n
+c$$$
+c$$$           func = func_utau(utauo,u,S,visc)
+c$$$           fder = fder_utau(utauo,u,S,visc)
+c$$$           utaun = utauo - func/fder
+c$$$c           write(*,'(I6, 5(1X,G22.15))') i, utaun, utauo, func, fder
+c$$$           if(dabs(utaun-utauo).le.tol) goto 10
+c$$$           utauo = utaun
+c$$$
+c$$$        enddo
+c$$$        write(*,*) 'Could not converge for utau ', utauo, u, S
+c$$$        call exitt
+c$$$
+c$$$ 10     continue
+c$$$c        write(*,*) 'utau is', utaun
+c$$$        find_root_utau = utaun
+c$$$
+c$$$        return
+c$$$        end
+c$$$
+c$$$        real function func_utau(utau,u,S,visc) 
+c$$$        implicit real(a-h,o-z)
+c$$$        real kap, S, E
+c$$$
+c$$$        kap = 0.4
+c$$$        E   = 9.0
+c$$$
+c$$$        func_utau = utau*utau - (kap*visc*S/E)*exp(kap*u/utau) 
+c$$$
+c$$$        return
+c$$$        end
+c$$$
+c$$$        real function fder_utau(utau,u,S,visc) 
+c$$$        implicit real(a-h,o-z)
+c$$$        real kap, S, E
+c$$$
+c$$$        kap = 0.4
+c$$$        E   = 9.0
+c$$$
+c$$$        fder_utau = 2.0*utau + 
+c$$$     $             (kap*kap*visc*u*S/E)*exp(kap*u/utau)/utau/utau
+c$$$
+c$$$        return
+c$$$        end
+c$$$
+c$$$      subroutine getangent(st,ix,iy,iz,iside,e)
+c$$$
+c$$$c     calculate surface normal
+c$$$
+c$$$      include 'SIZE'
+c$$$      include 'GEOM'
+c$$$      include 'TOPOL'
+c$$$
+c$$$      real st(3)
+c$$$      integer e,f
+c$$$
+c$$$      f = eface1(iside)
+c$$$
+c$$$      if (1.le.f.and.f.le.2) then     ! "r face"
+c$$$         st(1) = t1x(iy,iz,iside,e)
+c$$$         st(2) = t1y(iy,iz,iside,e)
+c$$$         st(3) = t1z(iy,iz,iside,e)
+c$$$      elseif (3.le.f.and.f.le.4) then ! "s face"
+c$$$         st(1) = t1x(ix,iz,iside,e)
+c$$$         st(2) = t1y(ix,iz,iside,e)
+c$$$         st(3) = t1z(ix,iz,iside,e)
+c$$$      elseif (5.le.f.and.f.le.6) then ! "t face"
+c$$$         st(1) = t1x(ix,iy,iside,e)
+c$$$         st(2) = t1y(ix,iy,iside,e)
+c$$$         st(3) = t1z(ix,iy,iside,e)
+c$$$      endif
+c$$$
+c$$$      return
+c$$$      end
+c$$$
+c$$$      subroutine getbitangent(sb,ix,iy,iz,iside,e)
+c$$$
+c$$$c     calculate surface normal
+c$$$
+c$$$      include 'SIZE'
+c$$$      include 'GEOM'
+c$$$      include 'TOPOL'
+c$$$
+c$$$      real sb(3)
+c$$$      integer e,f
+c$$$
+c$$$      f = eface1(iside)
+c$$$
+c$$$      if (1.le.f.and.f.le.2) then     ! "r face"
+c$$$         sb(1) = t2x(iy,iz,iside,e)
+c$$$         sb(2) = t2y(iy,iz,iside,e)
+c$$$         sb(3) = t2z(iy,iz,iside,e)
+c$$$      elseif (3.le.f.and.f.le.4) then ! "s face"
+c$$$         sb(1) = t2x(ix,iz,iside,e)
+c$$$         sb(2) = t2y(ix,iz,iside,e)
+c$$$         sb(3) = t2z(ix,iz,iside,e)
+c$$$      elseif (5.le.f.and.f.le.6) then ! "t face"
+c$$$         sb(1) = t2x(ix,iy,iside,e)
+c$$$         sb(2) = t2y(ix,iy,iside,e)
+c$$$         sb(3) = t2z(ix,iy,iside,e)
+c$$$      endif
+c$$$
+c$$$      return
+c$$$      end
+c$$$
+c$$$      subroutine fixmask_old(c1mask,c2mask,c3mask)
+c$$$
+c$$$c     fixes masks for SYM face corners
+c$$$
+c$$$      include 'SIZE'
+c$$$      include 'INPUT'
+c$$$      include 'GEOM'
+c$$$
+c$$$      real   c1mask(lx1,ly1,lz1,1)
+c$$$     $      ,c2mask(lx1,ly1,lz1,1)
+c$$$     $      ,c3mask(lx1,ly1,lz1,1)
+c$$$
+c$$$      common /ctmp0/ im1(lx1,ly1,lz1),im2(lx1,ly1,lz1)
+c$$$      integer e,f,val,im1,im2
+c$$$
+c$$$      character*3 cb
+c$$$
+c$$$      n = lx1*ly1*lz1
+c$$$
+c$$$      nface = 2*ldim
+c$$$
+c$$$      do e=1,nelv
+c$$$         call izero (im1,n)
+c$$$         call izero (im2,n)
+c$$$         do f=1,nface
+c$$$            cb  = cbc (f,e,1)
+c$$$            if (cb.eq.'SYM')  call add_iface_e(im1,f,1,lx1,ly1,lz1)
+c$$$c            if (cb.eq.'SYM')  call iface_e(im2,f,2,lx1,ly1,lz1)
+c$$$         enddo
+c$$$c         call icol2(im2,im1,n)
+c$$$
+c$$$         tolr = 1.e-8
+c$$$         k = 1
+c$$$         do j=1,ly1,ly1-1
+c$$$         do i=1,lx1,lx1-1
+c$$$            xx = xm1(i,j,k,e) 
+c$$$            yy = ym1(i,j,k,e) 
+c$$$            rr = sqrt(xx*xx+yy*yy)
+c$$$c            if  ( im2(i,j,k) .eq. 2) then  ! corner of SYM & 'SYM' faces
+c$$$            if  ( im1(i,j,k) .eq. 2) then  ! corner of SYM & 'SYM' faces
+c$$$               c1mask(i,j,k,e) = 0.
+c$$$               c2mask(i,j,k,e) = 0.
+c$$$            elseif(rr.le.tolr) then
+c$$$               c1mask(i,j,k,e) = 0.
+c$$$               c2mask(i,j,k,e) = 0.
+c$$$            endif
+c$$$         enddo
+c$$$         enddo
+c$$$      enddo
+c$$$
+c$$$c      do e=1,nelv
+c$$$c         if ( v1mask(1,1,1,e).eq.0 .and.
+c$$$c     $        v1mask(2,1,1,e).eq.0 .and.
+c$$$c     $        v1mask(1,2,1,e).eq.0 ) v2mask(1,1,1,e)=0.
+c$$$c
+c$$$c         if ( v1mask(nx1  ,1,1,e).eq.0 .and.
+c$$$c     $        v1mask(nx1-1,1,1,e).eq.0 .and.
+c$$$c     $        v1mask(nx1  ,2,1,e).eq.0 ) v2mask(nx1,1,1,e)=0.
+c$$$c
+c$$$c         if ( v1mask(1,ny1  ,1,e).eq.0 .and.
+c$$$c     $        v1mask(1,ny1-1,1,e).eq.0 .and.
+c$$$c     $        v1mask(2,ny1  ,1,e).eq.0 ) v2mask(1,ny1,1,e)=0.
+c$$$c
+c$$$c         if ( v1mask(nx1,ny1  ,1,e).eq.0 .and.
+c$$$c     $        v1mask(nx1,ny1-1,1,e).eq.0 .and.
+c$$$c     $        v1mask(nx1-1,ny1,1,e).eq.0 ) v2mask(nx1,ny1,1,e)=0.
+c$$$c      enddo
+c$$$
+c$$$      return
+c$$$      end
+c$$$
+c$$$c-----------------------------------------------------------------------
+c$$$      subroutine add_iface_e(a,iface,val,nx,ny,nz)
+c$$$
+c$$$C     Assign the value VAL to face(IFACE,IE) of array A.
+c$$$C     IFACE is the input in the pre-processor ordering scheme.
+c$$$
+c$$$      include 'SIZE'
+c$$$      integer a(nx,ny,nz),val
+c$$$      call facind (kx1,kx2,ky1,ky2,kz1,kz2,nx,ny,nz,iface)
+c$$$      do 100 iz=kz1,kz2
+c$$$      do 100 iy=ky1,ky2
+c$$$      do 100 ix=kx1,kx2
+c$$$         a(ix,iy,iz)=a(ix,iy,iz)+val
+c$$$  100 continue
+c$$$      return
+c$$$      end
+c$$$
+c$$$c-----------------------------------------------------------------------
+c$$$      subroutine un_face_e(u,iface,val,nx,ny,nz)
+c$$$
+c$$$C     Assign the value VAL to face(IFACE,IE) of array A.
+c$$$C     IFACE is the input in the pre-processor ordering scheme.
+c$$$
+c$$$      include 'SIZE'
+c$$$      real a(nx,ny,nz),val
+c$$$      call facind (kx1,kx2,ky1,ky2,kz1,kz2,nx,ny,nz,iface)
+c$$$      do 100 iz=kz1,kz2
+c$$$      do 100 iy=ky1,ky2
+c$$$      do 100 ix=kx1,kx2
+c$$$         a(ix,iy,iz)=a(ix,iy,iz)+val
+c$$$  100 continue
+c$$$      return
+c$$$      end
+c$$$
+c$$$c-----------------------------------------------------------------------
+c$$$      subroutine get_gradywd
+c$$$      include 'SIZE'
+c$$$      include 'TOTAL'
+c$$$      include 'RANS_KOMG'
+c$$$
+c$$$      common /gradywd/ ywdx(lx1,ly1,lz1,lelv),ywdy(lx1,ly1,lz1,lelv)
+c$$$     $                ,ywdz(lx1,ly1,lz1,lelv),ywdc(lx1,ly1,lz1,lelv)
+c$$$
+c$$$      ntot = lx1*ly1*lz1*lelv
+c$$$
+c$$$      call gradm1 (ywdx,ywdy,ywdz,   ywd)
+c$$$      call opcolv (ywdx,ywdy,ywdz,   bm1)
+c$$$      call opdssum(ywdx,ywdy,ywdz)
+c$$$      call opcolv (ywdx,ywdy,ywdz,binvm1)
+c$$$      call copy   (ywdc,ywd ,ntot)
+c$$$
+c$$$      return
+c$$$      end
+c$$$
+c$$$c-----------------------------------------------------------------------
+c$$$      subroutine fixmask(cbtype,c1mask,c2mask,c3mask)
+c$$$
+c$$$c     fixes masks for SYM face corners
+c$$$
+c$$$      include 'SIZE'
+c$$$      include 'INPUT'
+c$$$      include 'GEOM'
+c$$$      include 'PARALLEL'
+c$$$
+c$$$      real   c1mask(lx1,ly1,lz1,1)
+c$$$     $      ,c2mask(lx1,ly1,lz1,1)
+c$$$     $      ,c3mask(lx1,ly1,lz1,1)
+c$$$
+c$$$      real   arr(lx1,ly1,lz1,lelv),ar1(lx1,ly1,lz1,lelv)
+c$$$     $      ,ar2(lx1,ly1,lz1,lelv),ar3(lx1,ly1,lz1,lelv)
+c$$$
+c$$$      character*3 cb,cbtype
+c$$$
+c$$$      nxyz1= lx1*ly1*lz1
+c$$$      ntot1= nxyz1*nelv
+c$$$      nfaces = 2*ldim
+c$$$      tol  = 1.e-07
+c$$$
+c$$$      call rzero  (arr,  ntot1)
+c$$$      call oprzero(ar1,ar2,ar3)
+c$$$
+c$$$      write(*,*) 'element faces from fixmask'
+c$$$      do 1000 iel=1,nelv
+c$$$      ieg = lglel(iel)
+c$$$      do 100 iface=1,nfaces
+c$$$         cb = cbc(iface,iel,1)
+c$$$         if (cb.eq.cbtype) then
+c$$$            call facind(kx1,kx2,ky1,ky2,kz1,kz2,lx1,ly1,lz1,iface)
+c$$$            ia = 0
+c$$$            do 10 iz=kz1,kz2
+c$$$            do 10 iy=ky1,ky2
+c$$$            do 10 ix=kx1,kx2
+c$$$               ia =ia + 1
+c$$$               arr(ix,iy,iz,iel)=arr(ix,iy,iz,iel)+1.
+c$$$               ar1(ix,iy,iz,iel)=ar1(ix,iy,iz,iel)+unx(ia,1,iface,iel)
+c$$$               ar2(ix,iy,iz,iel)=ar2(ix,iy,iz,iel)+uny(ia,1,iface,iel)
+c$$$               if(if3d)
+c$$$     $         ar3(ix,iy,iz,iel)=ar3(ix,iy,iz,iel)+unz(ia,1,iface,iel)
+c$$$ 10         continue
+c$$$         endif
+c$$$ 100  continue
+c$$$ 1000 continue
+c$$$
+c$$$      call dssum  (arr,nx1,ny1,nz1)
+c$$$      call opdssum(ar1,  ar2,  ar3)
+c$$$
+c$$$      do 2000 iel=1,nelv
+c$$$      ieg = lglel(iel)
+c$$$      do 200 iface=1,nfaces
+c$$$         cb = cbc(iface,iel,1)
+c$$$         if (cb.eq.cbtype) then
+c$$$            call facind(kx1,kx2,ky1,ky2,kz1,kz2,lx1,ly1,lz1,iface)
+c$$$            ia = 0
+c$$$            do 20 iz=kz1,kz2
+c$$$            do 20 iy=ky1,ky2
+c$$$            do 20 ix=kx1,kx2
+c$$$               ia =ia + 1
+c$$$               amul = arr(ix,iy,iz,iel)
+c$$$               ar1s = ar1(ix,iy,iz,iel)/amul
+c$$$               ar2s = ar2(ix,iy,iz,iel)/amul
+c$$$               ar3s = 0.0
+c$$$
+c$$$               if(if3d)
+c$$$     $         ar3s = ar3(ix,iy,iz,iel)/amul
+c$$$               unmag = sqrt(ar1s*ar1s+ar2s*ar2s+ar3s*ar3s)
+c$$$
+c$$$               if((1.0-abs(unmag)).ge.tol) then
+c$$$                 write(*,'(A,3I5,2(2X,G14.7))') 'normal vector '
+c$$$     $                             , ieg, iface, ia, unmag, amul
+c$$$                 if(amul.eq.2.) then
+c$$$                    c1mask(ix,iy,iz,iel) = 0.
+c$$$                    c2mask(ix,iy,iz,iel) = 0.
+c$$$                 endif
+c$$$                 if(amul.eq.3.) then
+c$$$                    c1mask(ix,iy,iz,iel) = 0.
+c$$$                    c2mask(ix,iy,iz,iel) = 0.
+c$$$                    c3mask(ix,iy,iz,iel) = 0.
+c$$$                 endif
+c$$$               endif
+c$$$ 20         continue
+c$$$         endif
+c$$$ 200  continue
+c$$$ 2000 continue
+c$$$
+c$$$      return
+c$$$      end
+c$$$c-----------------------------------------------------------------------
+c$$$      subroutine fixmask2(cbtype1,cbtype2,c1mask,c2mask,c3mask)
+c$$$
+c$$$c     fixes masks for SYM face corners
+c$$$
+c$$$      include 'SIZE'
+c$$$      include 'INPUT'
+c$$$      include 'GEOM'
+c$$$      include 'PARALLEL'
+c$$$
+c$$$      real   c1mask(lx1,ly1,lz1,1)
+c$$$     $      ,c2mask(lx1,ly1,lz1,1)
+c$$$     $      ,c3mask(lx1,ly1,lz1,1)
+c$$$
+c$$$      common /scruz/ rmlt(lx1,ly1,lz1,lelv),runx(lx1,ly1,lz1,lelv)
+c$$$     $              ,runy(lx1,ly1,lz1,lelv),runz(lx1,ly1,lz1,lelv)
+c$$$     $              ,rt1x(lx1,ly1,lz1,lelv),rt1y(lx1,ly1,lz1,lelv)
+c$$$     $              ,rt1z(lx1,ly1,lz1,lelv),rt2x(lx1,ly1,lz1,lelv)
+c$$$     $              ,rt2y(lx1,ly1,lz1,lelv),rt2z(lx1,ly1,lz1,lelv)
+c$$$
+c$$$      character*3 cb,cbtype1,cbtype2
+c$$$
+c$$$      nxyz1= lx1*ly1*lz1
+c$$$      ntot1= nxyz1*nelv
+c$$$      nfaces = 2*ldim
+c$$$      tol  = 1.e-07
+c$$$
+c$$$      call rzero  (rmlt,    ntot1)
+c$$$      call oprzero(runx,runy,runz)
+c$$$      call oprzero(rt1x,rt1y,rt1z)
+c$$$      call oprzero(rt2x,rt2y,rt2z)
+c$$$
+c$$$      write(*,*) 'element faces from fixmask2'
+c$$$      do 1000 iel=1,nelv
+c$$$      ieg = lglel(iel)
+c$$$      do 100 iface=1,nfaces
+c$$$         cb = cbc(iface,iel,1)
+c$$$         if (cb.eq.cbtype1 .or. cb.eq.cbtype2) then
+c$$$            call facind(kx1,kx2,ky1,ky2,kz1,kz2,lx1,ly1,lz1,iface)
+c$$$            ia = 0
+c$$$            do 10 iz=kz1,kz2
+c$$$            do 10 iy=ky1,ky2
+c$$$            do 10 ix=kx1,kx2
+c$$$              ia =ia + 1
+c$$$              rmlt(ix,iy,iz,iel)=rmlt(ix,iy,iz,iel)+1.
+c$$$              runx(ix,iy,iz,iel)=runx(ix,iy,iz,iel)+unx(ia,1,iface,iel)
+c$$$              runy(ix,iy,iz,iel)=runy(ix,iy,iz,iel)+uny(ia,1,iface,iel)
+c$$$              rt1x(ix,iy,iz,iel)=rt1x(ix,iy,iz,iel)+t1x(ia,1,iface,iel)
+c$$$              rt1y(ix,iy,iz,iel)=rt1y(ix,iy,iz,iel)+t1y(ia,1,iface,iel)
+c$$$              rt2x(ix,iy,iz,iel)=rt2x(ix,iy,iz,iel)+t2x(ia,1,iface,iel)
+c$$$              rt2y(ix,iy,iz,iel)=rt2y(ix,iy,iz,iel)+t2y(ia,1,iface,iel)
+c$$$              if(if3d) then
+c$$$               runz(ix,iy,iz,iel)=runz(ix,iy,iz,iel)+unz(ia,1,iface,iel)
+c$$$               rt1z(ix,iy,iz,iel)=rt1z(ix,iy,iz,iel)+t1z(ia,1,iface,iel)
+c$$$               rt2z(ix,iy,iz,iel)=rt2z(ix,iy,iz,iel)+t2z(ia,1,iface,iel)
+c$$$              endif
+c$$$ 10         continue
+c$$$         endif
+c$$$ 100  continue
+c$$$ 1000 continue
+c$$$
+c$$$      call dssum  (rmlt,nx1,ny1,nz1)
+c$$$      call opdssum(runx, runy, runz)
+c$$$      call opdssum(rt1x, rt1y, rt1z)
+c$$$      call opdssum(rt2x, rt2y, rt2z)
+c$$$
+c$$$      do 2000 iel=1,nelv
+c$$$      ieg = lglel(iel)
+c$$$      do 200 iface=1,nfaces
+c$$$         cb = cbc(iface,iel,1)
+c$$$         if (cb.eq.cbtype1 .or. cb.eq.cbtype2) then
+c$$$            call facind(kx1,kx2,ky1,ky2,kz1,kz2,lx1,ly1,lz1,iface)
+c$$$            ia = 0
+c$$$            do 20 iz=kz1,kz2
+c$$$            do 20 iy=ky1,ky2
+c$$$            do 20 ix=kx1,kx2
+c$$$               ia =ia + 1
+c$$$               amul = rmlt(ix,iy,iz,iel)
+c$$$               runxs= runx(ix,iy,iz,iel)/amul
+c$$$               runys= runy(ix,iy,iz,iel)/amul
+c$$$               runzs= 0.0
+c$$$               rt1xs= rt1x(ix,iy,iz,iel)/amul
+c$$$               rt1ys= rt1y(ix,iy,iz,iel)/amul
+c$$$               rt1zs= 0.0
+c$$$               rt2xs= rt2x(ix,iy,iz,iel)/amul
+c$$$               rt2ys= rt2y(ix,iy,iz,iel)/amul
+c$$$               rt2zs= 0.0
+c$$$
+c$$$               if(if3d) then
+c$$$               runzs= runz(ix,iy,iz,iel)/amul
+c$$$               rt1zs= rt1z(ix,iy,iz,iel)/amul
+c$$$               rt2zs= rt2z(ix,iy,iz,iel)/amul
+c$$$               endif
+c$$$               unmag = sqrt(runxs*runxs+runys*runys+runzs*runzs)
+c$$$               t1mag = sqrt(rt1xs*rt1xs+rt1ys*rt1ys+rt1zs*rt1zs)
+c$$$               t2mag = sqrt(rt2xs*rt2xs+rt2ys*rt2ys+rt2zs*rt2zs)
+c$$$
+c$$$               if((1.0-abs(unmag)).ge.tol) then
+c$$$                 write(*,'(3(1X,A),3I5,2(2X,G14.7))') 'normal vector '
+c$$$     $            ,cbtype1, cbtype2, ieg, iface, ia, unmag, amul
+c$$$                 if    (if3d) then
+c$$$                   if(amul.eq.2.) then
+c$$$                    if    ((1.0-abs(t1mag)).ge.tol) then
+c$$$                      c1mask(ix,iy,iz,iel) = 0.
+c$$$                      c2mask(ix,iy,iz,iel) = 0.
+c$$$                    elseif((1.0-abs(t2mag)).ge.tol) then
+c$$$                      c1mask(ix,iy,iz,iel) = 0.
+c$$$                      c3mask(ix,iy,iz,iel) = 0.
+c$$$                    endif
+c$$$                   endif
+c$$$                   if(amul.eq.3.) then
+c$$$                      c1mask(ix,iy,iz,iel) = 0.
+c$$$                      c2mask(ix,iy,iz,iel) = 0.
+c$$$                      c3mask(ix,iy,iz,iel) = 0.
+c$$$                   endif
+c$$$                 else
+c$$$                   if(amul.eq.2.) then
+c$$$                      c1mask(ix,iy,iz,iel) = 0.
+c$$$                      c2mask(ix,iy,iz,iel) = 0.
+c$$$                   endif
+c$$$                 endif
+c$$$               endif
+c$$$
+c$$$ 20         continue
+c$$$         endif
+c$$$ 200  continue
+c$$$ 2000 continue
+c$$$
+c$$$      return
+c$$$      end
