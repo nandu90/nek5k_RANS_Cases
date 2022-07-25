@@ -77,7 +77,7 @@ def plotnow2(fname,x,y,labels,lstyles,mrks):
     axs.grid()
     axs.set_ylim([0,3])
     axs.legend(loc='best',fontsize=12)
-    #axs.set_xlabel('$u/U$',fontsize=15)
+    axs.set_xlabel('$u/U$',fontsize=15)
     axs.set_ylabel('$y/H$',fontsize=15)
     axs.tick_params(axis='both',labelsize=12)
 
@@ -237,14 +237,14 @@ def main():
     uadd = [0,0,0,0,0,0,0,0]
     ifadd = False
 
-    # poslabels = ["2","4","6.5","8","14","32"]
-    # uadd = [0.5,1,1.5,2,2.5,3]
-    # ifadd = True
+    poslabels = ["2","4","6.5","8","14","32"]
+    uadd = [0.5,1,1.5,2,2.5,3]
+    ifadd = True
 
     #all_labels = poslabels
     
     cases = ['wallResolved_ktau/tplots','wallResolved_ktau_scaled/tplots','openFoam','openFoam2','of3']
-    cases = ['wallResolved_ktau_scaled/tplots','wallResolved_omega/tplots','med']
+    cases = ['wallResolved_ktau/tplots','wallResolved_omega/tplots','med']
 
     labels = ['$k-\\tau$','reg $k-\\omega$','OF $k-\\omega$ SST (fine)','OF $k-\\omega SST (med)$','OF $k-\\omega SST (coarse)$']
     labels = ['$k-\\tau$','$k-\\omega \, (reg)$','OF $k-\\omega \, SST$','OF $k-\\omega SST (med)$']
