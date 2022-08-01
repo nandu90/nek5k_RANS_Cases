@@ -1,0 +1,40 @@
+#Nek5000 parameter file
+[GENERAL]
+startFrom = tjunc.old
+stopAt = numSteps
+numSteps = 10000 #50000
+dt = 1.e-6
+writeInterval = 1000
+timeStepper = BDF2
+targetCFL = 0.75
+
+[PROBLEMTYPE]
+equation = incompNS
+stressFormulation = yes
+variableProperties = yes
+
+[MESH]
+writeToFieldFile = yes
+
+[VELOCITY]
+density = 1.0
+viscosity = -40000.0
+residualTol = 1e-8
+residualPROJ = yes
+
+[PRESSURE]
+residualTol = 1e-6
+residualPROJ = yes
+
+[TEMPERATURE]
+solver = none
+
+[SCALAR01] 
+density = 1.0
+diffusivity = -40000.0
+residualTol = 1e-8
+
+[SCALAR02] 
+density = 1.0
+diffusivity = -40000.0
+residualTol = 1e-8
